@@ -1,0 +1,94 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "The Forever Jukebox Analysis",
+  "type": "object",
+  "oneOf": [
+    { "$ref": "#/definitions/analysis" },
+    {
+      "type": "object",
+      "properties": {
+        "analysis": { "$ref": "#/definitions/analysis" }
+      },
+      "required": ["analysis"],
+      "additionalProperties": true
+    }
+  ],
+  "definitions": {
+    "analysis": {
+      "type": "object",
+      "properties": {
+        "sections": { "$ref": "#/definitions/quantumList" },
+        "bars": { "$ref": "#/definitions/quantumList" },
+        "beats": { "$ref": "#/definitions/quantumList" },
+        "tatums": { "$ref": "#/definitions/quantumList" },
+        "segments": { "$ref": "#/definitions/segmentList" },
+        "track": { "$ref": "#/definitions/track" }
+      },
+      "required": ["sections", "bars", "beats", "tatums", "segments"],
+      "additionalProperties": true
+    },
+    "quantumList": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/quantum" }
+    },
+    "quantum": {
+      "type": "object",
+      "properties": {
+        "start": { "type": "number" },
+        "duration": { "type": "number" },
+        "confidence": { "type": "number" }
+      },
+      "required": ["start", "duration"],
+      "additionalProperties": true
+    },
+    "segmentList": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/segment" }
+    },
+    "segment": {
+      "type": "object",
+      "properties": {
+        "start": { "type": "number" },
+        "duration": { "type": "number" },
+        "confidence": { "type": "number" },
+        "loudness_start": { "type": "number" },
+        "loudness_max": { "type": "number" },
+        "loudness_max_time": { "type": "number" },
+        "pitches": {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 12,
+          "maxItems": 12
+        },
+        "timbre": {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 12,
+          "maxItems": 12
+        }
+      },
+      "required": [
+        "start",
+        "duration",
+        "confidence",
+        "loudness_start",
+        "loudness_max",
+        "loudness_max_time",
+        "pitches",
+        "timbre"
+      ],
+      "additionalProperties": true
+    },
+    "track": {
+      "type": "object",
+      "properties": {
+        "duration": { "type": "number" },
+        "tempo": { "type": "number" },
+        "time_signature": { "type": "number" },
+        "artist": { "type": "string" },
+        "title": { "type": "string" }
+      },
+      "additionalProperties": true
+    }
+  }
+}

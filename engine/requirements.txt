@@ -1,0 +1,10 @@
+Cython
+madmom
+librosa
+numpy==1.26.4
+scipy
+soundfile
+numba
+llvmlite
+mido
+mutagen
