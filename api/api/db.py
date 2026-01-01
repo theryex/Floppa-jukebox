@@ -169,6 +169,19 @@ def get_job_by_youtube_id(db_path: Path, youtube_id: str) -> Optional[Job]:
     return Job(*row)
 
 
+def get_job_by_track(db_path: Path, title: str, artist: str) -> Optional[Job]:
+    with sqlite3.connect(db_path) as conn:
+        row = conn.execute(
+            "SELECT id, status, input_path, output_path, error, "
+            "track_title, track_artist, youtube_id, progress, play_count, created_at, updated_at "
+            "FROM jobs WHERE track_title = ? AND track_artist = ? ORDER BY created_at DESC LIMIT 1",
+            (title, artist),
+        ).fetchone()
+    if not row:
+        return None
+    return Job(*row)
+
+
 def increment_job_plays(db_path: Path, job_id: str) -> Optional[int]:
     now = _utc_now()
     with sqlite3.connect(db_path) as conn:

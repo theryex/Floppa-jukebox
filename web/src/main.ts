@@ -732,10 +732,11 @@ async function startYoutubeAnalysis(
   setLoadingProgress(0);
   lastYouTubeId = youtubeId;
   updateTrackUrl(youtubeId);
+  const payload = { youtube_id: youtubeId, title, artist };
   const response = await fetch("/api/analysis/youtube", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ youtube_id: youtubeId, title, artist }),
+    body: JSON.stringify(payload),
   });
   if (!response.ok) {
     throw new Error(`YouTube download failed (${response.status})`);
@@ -807,6 +808,65 @@ async function showYoutubeMatches(
   }
 }
 
+async function tryLoadExistingTrackByName(title: string, artist: string) {
+  if (!artist) {
+    return false;
+  }
+  searchResults.textContent = "Checking existing analysis...";
+  searchHint.textContent = "Step 2: Choose the closest YouTube match.";
+  try {
+    const params = new URLSearchParams({
+      title,
+      artist,
+    });
+    const response = await fetch(
+      `/api/jobs/by-track?${params.toString()}`
+    );
+    if (response.status === 404) {
+      return false;
+    }
+    if (!response.ok) {
+      throw new Error(`Lookup failed (${response.status})`);
+    }
+    const data = await response.json();
+    const jobId = typeof data.id === "string" ? data.id : null;
+    const youtubeId =
+      typeof data.youtube_id === "string" ? data.youtube_id : null;
+    if (!jobId || !youtubeId) {
+      return false;
+    }
+    resetForNewTrack();
+    resetSearchUI();
+    audioLoaded = false;
+    analysisLoaded = false;
+    updateVizVisibility();
+    setActiveTab("play");
+    setLoadingProgress(0);
+    lastYouTubeId = youtubeId;
+    updateTrackUrl(youtubeId);
+    lastJobId = jobId;
+    if (response.status === 202) {
+      await pollAnalysis(jobId);
+      return true;
+    }
+    if (data.status === "failed") {
+      return false;
+    }
+    if (data.status === "complete" && data.result) {
+      if (!audioLoaded) {
+        await loadAudioFromJob(jobId);
+      }
+      applyAnalysisResult(data);
+      return true;
+    }
+    await pollAnalysis(jobId);
+    return true;
+  } catch (err) {
+    searchResults.textContent = `Lookup failed: ${String(err)}`;
+    return false;
+  }
+}
+
 async function runSearch() {
   const query = searchInput.value.trim();
   if (!query) {
@@ -845,6 +905,9 @@ async function runSearch() {
       durationSpan.textContent = formatTrackDuration(item.duration);
       li.append(titleSpan, durationSpan);
       li.addEventListener("click", async () => {
+        if (await tryLoadExistingTrackByName(name, artist)) {
+          return;
+        }
         if (duration === null) {
           alert("No duration available for this track.");
           return;

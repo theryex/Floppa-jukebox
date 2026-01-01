@@ -20,6 +20,7 @@ from .db import (
     create_job,
     delete_job,
     get_job,
+    get_job_by_track,
     get_job_by_youtube_id,
     get_top_tracks,
     increment_job_plays,
@@ -81,18 +82,25 @@ def _rel_storage_path(path: Path) -> str:
 
 
 def _job_response(job) -> JSONResponse:
+    base_payload = {"id": job.id, "youtube_id": job.youtube_id}
     if job.status in {"queued", "processing", "downloading"}:
         return JSONResponse(
-            {"id": job.id, "status": job.status, "progress": job.progress},
+            {**base_payload, "status": job.status, "progress": job.progress},
             status_code=202,
         )
 
     if job.status == "failed":
-        return JSONResponse({"id": job.id, "status": "failed", "error": job.error}, status_code=200)
+        return JSONResponse(
+            {**base_payload, "status": "failed", "error": job.error},
+            status_code=200,
+        )
 
     result_path = _abs_storage_path(job.output_path)
     if not result_path.exists():
-        return JSONResponse({"id": job.id, "status": "failed", "error": "Analysis missing"}, status_code=200)
+        return JSONResponse(
+            {**base_payload, "status": "failed", "error": "Analysis missing"},
+            status_code=200,
+        )
 
     data = json.loads(result_path.read_text(encoding="utf-8"))
     if isinstance(data, dict) and (job.track_title or job.track_artist):
@@ -105,7 +113,7 @@ def _job_response(job) -> JSONResponse:
         if job.track_artist and not track.get("artist"):
             track["artist"] = job.track_artist
     return JSONResponse(
-        {"id": job.id, "status": "complete", "result": data, "progress": job.progress},
+        {**base_payload, "status": "complete", "result": data, "progress": job.progress},
         status_code=200,
     )
 
@@ -399,6 +407,11 @@ def create_analysis_youtube(
     if track_artist is not None and not isinstance(track_artist, str):
         raise HTTPException(status_code=400, detail="artist must be a string")
 
+    if track_title and track_artist:
+        existing_by_track = get_job_by_track(DB_PATH, track_title, track_artist)
+        if existing_by_track and existing_by_track.status != "failed":
+            return _job_response(existing_by_track)
+
     existing = get_job_by_youtube_id(DB_PATH, youtube_id)
     if existing and existing.status != "failed":
         return _job_response(existing)
@@ -445,6 +458,16 @@ def get_job_log(job_id: str):
 @app.get("/api/jobs/by-youtube/{youtube_id}")
 def get_job_by_youtube(youtube_id: str) -> JSONResponse:
     job = get_job_by_youtube_id(DB_PATH, youtube_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return _job_response(job)
+
+
+@app.get("/api/jobs/by-track")
+def get_job_by_track_match(
+    title: str = Query(..., min_length=1), artist: str = Query(..., min_length=1)
+) -> JSONResponse:
+    job = get_job_by_track(DB_PATH, title, artist)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     return _job_response(job)
