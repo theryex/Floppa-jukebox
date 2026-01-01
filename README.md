@@ -65,7 +65,7 @@ with a volume (EBS/EFS on AWS) since container storage is ephemeral.
 
 For standalone setup, see:
 
-- [`engine/README.md`](https://github.com/forever-jukebox/blob/master/engine/README.md)
-- [`api/README.md`](https://github.com/forever-jukebox/blob/master/api/README.md)
-- [`web/README.md`](https://github.com/forever-jukebox/blob/master/web/README.md)
-- [`android/README.md`](https://github.com/forever-jukebox/blob/master/android/README.md)
+- [`engine/README.md`](https://github.com/creightonlinza/forever-jukebox/blob/master/engine/README.md)
+- [`api/README.md`](https://github.com/creightonlinza/forever-jukebox/blob/master/api/README.md)
+- [`web/README.md`](https://github.com/creightonlinza/forever-jukebox/blob/master/web/README.md)
+- [`android/README.md`](https://github.com/creightonlinza/forever-jukebox/blob/master/android/README.md)
