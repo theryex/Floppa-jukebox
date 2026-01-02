@@ -3,274 +3,68 @@
 from __future__ import annotations
 
 import math
-import os
-import threading
-import time
-from pathlib import Path
+from dataclasses import dataclass
 from typing import Any, Callable
-
-# Ensure numba caching is disabled before importing librosa.
-os.environ.setdefault("NUMBA_DISABLE_JIT", "1")
-os.environ.setdefault("NUMBA_DISABLE_CACHING", "1")
-os.environ.setdefault("NUMBA_DISABLE_CACHE", "1")
 
 import numpy as np
 import scipy
 from scipy.cluster.vq import kmeans2
 
-from datetime import datetime, timezone
-
+from . import env
 from . import features
 from .config import AnalysisConfig
-
-DEFAULT_SR = 22050
-DEFAULT_HOP = 512
-DEFAULT_TIME_SIGNATURE = 4
-DEFAULT_TATUM_DIVISIONS = 2
-DEFAULT_SECTION_SECONDS = 30.0
-
-
-def _round_floats(obj: Any, ndigits: int = 5) -> Any:
-    if isinstance(obj, float):
-        return round(obj, ndigits)
-    if isinstance(obj, list):
-        return [_round_floats(item, ndigits) for item in obj]
-    if isinstance(obj, dict):
-        return {key: _round_floats(value, ndigits) for key, value in obj.items()}
-    return obj
+from .constants import EPS, MIN_DURATION_S, MIN_TEMPO_WINDOW_S
+from .analyzer_utils import (
+    _segment_times,
+    _events_from_times,
+    _fix_event_end,
+    _apply_segment_calibration,
+    _madmom_downbeats,
+)
+from .io_utils import _read_track_metadata, _round_floats, _sanitize_small_values
+from .progress import ProgressReporter
+from .time_utils import frame_slice, frames_to_time, time_to_frames
 
 
-def _read_track_metadata(path: str) -> dict[str, str]:
-    try:
-        from mutagen import File as MutagenFile
-    except Exception:
-        return {}
-
-    try:
-        audio = MutagenFile(path, easy=True)
-    except Exception:
-        return {}
-
-    if not audio or not getattr(audio, "tags", None):
-        return {}
-
-    def first_tag_value(key: str) -> str | None:
-        value = audio.tags.get(key)
-        if not value:
-            return None
-        if isinstance(value, list):
-            return str(value[0]) if value else None
-        return str(value)
-
-    metadata: dict[str, str] = {}
-    title = first_tag_value("title")
-    artist = first_tag_value("artist")
-    if title:
-        metadata["title"] = title
-    if artist:
-        metadata["artist"] = artist
-    return metadata
+@dataclass
+class FeatureBundle:
+    full_mfcc_seg: np.ndarray
+    full_timbre: np.ndarray
+    full_chroma: np.ndarray
+    beat_mfcc: np.ndarray
+    beat_chroma: np.ndarray
+    beat_novelty: np.ndarray
+    section_novelty: np.ndarray
+    onset_peaks: np.ndarray
+    novelty_norm: np.ndarray
+    onset_norm: np.ndarray
+    combined: np.ndarray
+    mfcc_frame_length: int
+    mfcc_hop_length: int
 
 
-def _sanitize_small_values(obj: Any, parent_key: str | None = None, threshold: float = 1e-4) -> Any:
-    if isinstance(obj, float):
-        if parent_key not in {"pitches", "timbre"} and abs(obj) < threshold:
-            return 0.0
-        return obj
-    if isinstance(obj, list):
-        return [_sanitize_small_values(item, parent_key, threshold) for item in obj]
-    if isinstance(obj, dict):
-        return {key: _sanitize_small_values(value, key, threshold) for key, value in obj.items()}
-    return obj
-
-
-def _segment_times(
-    onset_times: np.ndarray, duration: float, include_start: bool = True, include_end: bool = True
-) -> np.ndarray:
-    parts = [onset_times]
-    if include_start:
-        parts.insert(0, np.array([0.0], dtype=float))
-    if include_end:
-        parts.append(np.array([duration], dtype=float))
-    times = np.unique(np.concatenate(parts))
-    times = times[(times >= 0) & (times <= duration)]
-    if len(times) < 2:
-        return np.array([0.0, duration])
-    return times
-
-
-def _frame_slice(time_start: float, time_end: float, sr: int, hop_length: int) -> tuple[int, int]:
-    start = int(math.floor(time_start * sr / hop_length))
-    end = int(math.ceil(time_end * sr / hop_length))
-    return max(0, start), max(start + 1, end)
-
-
-def _events_from_times(times: np.ndarray, confidences: list[float], duration: float) -> list[dict[str, float]]:
-    events = []
-    for idx, start in enumerate(times):
-        end = times[idx + 1] if idx + 1 < len(times) else duration
-        if end <= start:
-            continue
-        events.append(
-            {
-                "start": float(start),
-                "duration": float(end - start),
-                "confidence": float(confidences[idx]) if idx < len(confidences) else 0.0,
-            }
-        )
-    return events
-
-
-def _fix_event_end(events: list[dict[str, Any]], duration: float) -> None:
-    if not events:
-        return
-    last = events[-1]
-    start = float(last.get("start", 0.0))
-    if start < 0:
-        start = 0.0
-        last["start"] = 0.0
-    new_duration = max(0.0, duration - start)
-    last["duration"] = new_duration
-
-
-def _normalize_event_durations(events: list[dict[str, Any]], duration: float) -> None:
-    if not events:
-        return
-    events.sort(key=lambda item: float(item.get("start", 0.0)))
-    for idx in range(len(events) - 1):
-        start = float(events[idx].get("start", 0.0))
-        next_start = float(events[idx + 1].get("start", start))
-        events[idx]["duration"] = max(0.0, next_start - start)
-    _fix_event_end(events, duration)
-
-
-def _apply_segment_calibration(segment: dict[str, Any], cfg: AnalysisConfig) -> None:
-    if cfg.segment_quantile_maps:
-        for field, mapping in cfg.segment_quantile_maps.items():
-            if field not in segment:
-                continue
-            src = mapping.get("src", [])
-            dst = mapping.get("dst", [])
-            if len(src) >= 2 and len(src) == len(dst):
-                value = float(segment[field])
-                segment[field] = float(np.interp(value, src, dst))
-
-    if cfg.segment_scalar_scale and cfg.segment_scalar_bias:
-        for field, scale in cfg.segment_scalar_scale.items():
-            if field not in segment:
-                continue
-            bias = float(cfg.segment_scalar_bias.get(field, 0.0))
-            value = float(segment[field])
-            segment[field] = value * float(scale) + bias
-
-    if "confidence" in segment:
-        segment["confidence"] = min(1.0, max(0.0, float(segment["confidence"])))
-    if "loudness_max_time" in segment:
-        max_time = float(segment.get("duration", 0.0))
-        segment["loudness_max_time"] = min(max_time, max(0.0, float(segment["loudness_max_time"])))
-
-
-def _madmom_downbeats(proc: Any, activations: np.ndarray) -> np.ndarray:
-    first = 0
-    if proc.threshold:
-        idx = np.nonzero(activations >= proc.threshold)[0]
-        if idx.any():
-            first = max(first, int(np.min(idx)))
-            last = min(len(activations), int(np.max(idx)) + 1)
-        else:
-            last = first
-        activations = activations[first:last]
-    if not activations.any():
-        return np.empty((0, 2))
-
-    results = [hmm.viterbi(activations) for hmm in proc.hmms]
-    best = int(np.argmax([float(r[1]) for r in results]))
-    path, _ = results[best]
-    st = proc.hmms[best].transition_model.state_space
-    om = proc.hmms[best].observation_model
-    positions = st.state_positions[path]
-    beat_numbers = positions.astype(int) + 1
-    if proc.correct:
-        beats = np.empty(0, dtype=int)
-        beat_range = om.pointers[path] >= 1
-        idx = np.nonzero(np.diff(beat_range.astype(int)))[0] + 1
-        if beat_range[0]:
-            idx = np.r_[0, idx]
-        if beat_range[-1]:
-            idx = np.r_[idx, beat_range.size]
-        if idx.any():
-            for left, right in idx.reshape((-1, 2)):
-                peak = np.argmax(activations[left:right]) // 2 + left
-                beats = np.hstack((beats, peak))
-    else:
-        beats = np.nonzero(np.diff(beat_numbers))[0] + 1
-    return np.vstack(((beats + first) / float(proc.fps), beat_numbers[beats])).T
-
-
-def analyze_audio(
-    path: str,
-    config: AnalysisConfig | None = None,
-    progress_cb: Callable[[int, str], None] | None = None,
-) -> dict[str, Any]:
-    cfg = config or AnalysisConfig()
-    last_progress = -1
-    def report_progress(percent: int, stage: str) -> None:
-        nonlocal last_progress
-        if not progress_cb:
-            return
-        percent = max(last_progress, percent)
-        if percent == last_progress and stage.startswith("beats_wait"):
-            return
-        last_progress = percent
-        progress_cb(percent, stage)
-
-    def start_progress_ramp(
-        start_pct: int, end_pct: int, stage: str
-    ) -> tuple[threading.Event, threading.Thread] | None:
-        if not progress_cb:
-            return None
-        stop_event = threading.Event()
-        duration_s = max(20.0, min(120.0, duration * 0.6 if duration else 60.0))
-        rate = (end_pct - start_pct) / duration_s if duration_s > 0 else 0.5
-        def runner() -> None:
-            start_time = time.time()
-            while not stop_event.is_set():
-                elapsed = time.time() - start_time
-                pct = start_pct + int(elapsed * rate)
-                pct = min(end_pct, max(start_pct, pct))
-                report_progress(pct, stage)
-                if pct >= end_pct:
-                    break
-                stop_event.wait(0.5)
-        thread = threading.Thread(target=runner, daemon=True)
-        thread.start()
-        return stop_event, thread
-
-    if progress_cb:
-        report_progress(50, "load_audio")
-    y, sr = features.load_audio(path, sr=cfg.sample_rate)
-    y_beats = y
-    if cfg.percussive_beats_only:
-        y_beats = features.percussive_component(y, sr, hop_length=cfg.hop_length)
-        if progress_cb:
-            report_progress(55, "percussive")
-    duration = float(len(y) / sr) if sr else 0.0
-    laplacian_seg_ids = None
-    ramp = start_progress_ramp(50, 75, "beats_wait")
+def _compute_beats(
+    cfg: AnalysisConfig,
+    y_beats: np.ndarray,
+    sr: int,
+    duration: float,
+    reporter: ProgressReporter,
+) -> tuple[float, np.ndarray, np.ndarray, list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], list[float]]:
+    tempo = 120.0
+    ramp = reporter.ramp(50, 75, "beats_wait", duration)
 
     if cfg.use_madmom_downbeats:
         import warnings
+
         warnings.filterwarnings(
             "ignore",
             message="pkg_resources is deprecated as an API.*",
             category=UserWarning,
         )
-        if not hasattr(np, "float"):
-            np.float = float  # type: ignore[attr-defined]
-        if not hasattr(np, "int"):
-            np.int = int  # type: ignore[attr-defined]
-        if not hasattr(np, "complex"):
-            np.complex = complex  # type: ignore[attr-defined]
+        if np.lib.NumpyVersion(np.__version__) >= "1.24.0":
+            for name, alias in (("float", float), ("int", int), ("complex", complex)):
+                if not hasattr(np, name):
+                    setattr(np, name, alias)
         import collections
         from collections import abc as collections_abc
 
@@ -293,7 +87,7 @@ def analyze_audio(
         beat_times = downbeats[:, 0].astype(float)
         beat_times = beat_times[beat_times <= duration]
         onset_env = features.onset_envelope(y_beats, sr, hop_length=cfg.hop_length)
-        tempo = 60.0 * (len(beat_times) / max(duration, 1e-6)) if beat_times.size else float(tempo)
+        tempo = 60.0 * (len(beat_times) / max(duration, MIN_TEMPO_WINDOW_S)) if beat_times.size else tempo
     elif cfg.use_librosa_beats:
         import librosa
 
@@ -313,11 +107,11 @@ def analyze_audio(
             min_bpm=cfg.tempo_min_bpm,
             max_bpm=cfg.tempo_max_bpm,
         )
-    if progress_cb:
-        report_progress(60, "beats_track")
+
+    reporter.report(60, "beats_track")
     if beat_times.size == 0:
         tempo = 120.0
-        beat_times = np.arange(0.0, max(duration, 0.01), 60.0 / tempo)
+        beat_times = np.arange(0.0, max(duration, MIN_DURATION_S), 60.0 / tempo)
         onset_env = np.ones(int(math.ceil(duration * sr / cfg.hop_length)))
 
     onset_peaks = features.detect_peaks(
@@ -329,16 +123,11 @@ def analyze_audio(
     )
     beat_times = features.snap_times_to_peaks(beat_times, onset_peaks, window_s=cfg.beat_snap_window_s)
     beat_conf = features.sample_confidence(beat_times, onset_env, sr, hop_length=cfg.hop_length)
-    if progress_cb:
-        report_progress(65, "beats_snap")
+    reporter.report(65, "beats_snap")
 
     beats = _events_from_times(beat_times, beat_conf, duration)
-    if ramp:
-        stop_event, thread = ramp
-        stop_event.set()
-        thread.join(0.2)
-    if progress_cb:
-        report_progress(75, "beats")
+    reporter.stop_ramp(ramp)
+    reporter.report(75, "beats")
 
     bars = []
     if beats:
@@ -364,6 +153,17 @@ def analyze_audio(
             tatums = _events_from_times(np.array(tatum_times), tatum_conf, duration)
             _fix_event_end(tatums, duration)
 
+    return tempo, beat_times, onset_env, beats, bars, tatums, beat_conf
+
+
+def _compute_feature_bundle(
+    cfg: AnalysisConfig,
+    y: np.ndarray,
+    sr: int,
+    beat_times: np.ndarray,
+    onset_env: np.ndarray,
+    reporter: ProgressReporter,
+) -> FeatureBundle:
     mfcc_frame_length = max(256, int(round(sr * cfg.mfcc_window_ms / 1000.0)))
     mfcc_hop_length = max(1, int(round(sr * cfg.mfcc_hop_ms / 1000.0)))
 
@@ -395,9 +195,9 @@ def analyze_audio(
             include_0th=cfg.mfcc_use_0th,
         )
     full_chroma = features.chroma_frames(y, sr, hop_length=cfg.hop_length)
-    if progress_cb:
-        report_progress(80, "features")
-    beat_frames = features.time_to_frames(beat_times, sr, hop_length=cfg.hop_length) if beat_times.size else np.array([])
+    reporter.report(80, "features")
+
+    beat_frames = time_to_frames(beat_times, sr, cfg.hop_length) if beat_times.size > 0 else np.array([])
     beat_mfcc = features.beat_sync_mean(full_mfcc_seg, beat_frames)
     beat_chroma = features.beat_sync_mean(full_chroma, beat_frames)
     beat_novelty = features.novelty_from_ssm(
@@ -407,30 +207,65 @@ def analyze_audio(
         features.cosine_similarity_matrix(beat_chroma), cfg.section_selfsim_kernel_beats
     )
 
-    # Novelty based on MFCC cosine distance.
     novelty = np.zeros(full_mfcc_seg.shape[1])
     for i in range(1, full_mfcc_seg.shape[1]):
         prev = full_mfcc_seg[:, i - 1]
         curr = full_mfcc_seg[:, i]
-        denom = (np.linalg.norm(prev) * np.linalg.norm(curr)) + 1e-9
+        denom = (np.linalg.norm(prev) * np.linalg.norm(curr)) + EPS
         novelty[i] = 1.0 - float(np.dot(prev, curr) / denom)
 
-    # Normalize and smooth combined novelty + onset envelope.
     min_len = min(len(novelty), len(onset_env))
     novelty_norm = novelty[:min_len]
     onset_norm = onset_env[:min_len]
     if novelty_norm.size:
-        novelty_norm = novelty_norm / (np.max(novelty_norm) + 1e-9)
+        novelty_norm = novelty_norm / (np.max(novelty_norm) + EPS)
     if onset_norm.size:
-        onset_norm = onset_norm / (np.max(onset_norm) + 1e-9)
+        onset_norm = onset_norm / (np.max(onset_norm) + EPS)
     combined = novelty_norm + onset_norm
     if cfg.novelty_smooth_frames > 1:
         kernel = np.ones(cfg.novelty_smooth_frames) / float(cfg.novelty_smooth_frames)
         combined = np.convolve(combined, kernel, mode="same")
 
-    onset_times = onset_peaks
+    onset_peaks = features.detect_peaks(
+        onset_env,
+        sr,
+        hop_length=cfg.hop_length,
+        percentile=cfg.onset_percentile,
+        min_spacing_s=cfg.onset_min_spacing_s,
+    )
+
+    return FeatureBundle(
+        full_mfcc_seg=full_mfcc_seg,
+        full_timbre=full_timbre,
+        full_chroma=full_chroma,
+        beat_mfcc=beat_mfcc,
+        beat_chroma=beat_chroma,
+        beat_novelty=beat_novelty,
+        section_novelty=section_novelty,
+        onset_peaks=onset_peaks,
+        novelty_norm=novelty_norm,
+        onset_norm=onset_norm,
+        combined=combined,
+        mfcc_frame_length=mfcc_frame_length,
+        mfcc_hop_length=mfcc_hop_length,
+    )
+
+
+def _compute_segments(
+    cfg: AnalysisConfig,
+    y: np.ndarray,
+    sr: int,
+    duration: float,
+    beat_times: np.ndarray,
+    bars: list[dict[str, Any]],
+    onset_env: np.ndarray,
+    bundle: FeatureBundle,
+    laplacian_seg_ids: np.ndarray | None,
+    reporter: ProgressReporter,
+) -> tuple[list[dict[str, Any]], np.ndarray, np.ndarray]:
+    onset_times = bundle.onset_peaks
     novelty_times = features.detect_peaks(
-        combined,
+        bundle.combined,
         sr,
         hop_length=cfg.hop_length,
         percentile=cfg.onset_percentile,
@@ -438,21 +273,22 @@ def analyze_audio(
     )
 
     seg_seed = np.unique(np.concatenate([onset_times, novelty_times]))
-    if beat_times.size and beat_novelty.size:
+    if beat_times.size > 0 and bundle.beat_novelty.size > 0:
         beat_peaks = features.detect_peaks_series(
-            beat_novelty,
+            bundle.beat_novelty,
             percentile=cfg.segment_selfsim_percentile,
             min_distance=cfg.segment_selfsim_min_spacing_beats,
         )
         if beat_peaks.size:
             seg_seed = np.unique(np.concatenate([seg_seed, beat_times[beat_peaks]]))
-    min_len = min(len(onset_env), len(novelty_norm))
+
+    min_len = min(len(onset_env), len(bundle.novelty_norm))
     if min_len:
-        onset_feat = onset_norm[:min_len]
-        novelty_feat = novelty_norm[:min_len]
+        onset_feat = bundle.onset_norm[:min_len]
+        novelty_feat = bundle.novelty_norm[:min_len]
         beat_feat = np.zeros(min_len, dtype=float)
         if beat_times.size >= 2:
-            beat_frames = features.time_to_frames(beat_times, sr, hop_length=cfg.hop_length)
+            beat_frames = time_to_frames(beat_times, sr, cfg.hop_length)
             beat_frames = np.clip(beat_frames, 0, max(min_len - 1, 0))
             beat_frames = np.unique(beat_frames)
             for idx in range(len(beat_frames) - 1):
@@ -488,15 +324,15 @@ def analyze_audio(
     )
     if cfg.use_laplacian_segments and laplacian_seg_ids is not None:
         changes = np.flatnonzero(np.diff(laplacian_seg_ids)) + 1
-        seg_seed = beat_times[changes] if beat_times.size else np.array([], dtype=float)
+        seg_seed = beat_times[changes] if beat_times.size > 0 else np.array([], dtype=float)
         seg_times = _segment_times(
             seg_seed, duration, include_start=cfg.segment_include_bounds, include_end=cfg.segment_include_bounds
         )
 
     beat_novelty_times = np.array([], dtype=float)
-    if beat_times.size >= 2 and combined.size:
-        beat_frames = features.time_to_frames(beat_times, sr, hop_length=cfg.hop_length)
-        beat_frames = np.clip(beat_frames, 0, max(len(combined) - 1, 0))
+    if beat_times.size >= 2 and bundle.combined.size > 0:
+        beat_frames = time_to_frames(beat_times, sr, cfg.hop_length)
+        beat_frames = np.clip(beat_frames, 0, max(len(bundle.combined) - 1, 0))
         beat_frames = np.unique(beat_frames)
         if beat_frames.size >= 2:
             beat_vals = []
@@ -505,7 +341,7 @@ def analyze_audio(
                 end = int(beat_frames[idx + 1])
                 if end <= start:
                     continue
-                beat_vals.append(float(np.mean(combined[start:end])))
+                beat_vals.append(float(np.mean(bundle.combined[start:end])))
             beat_vals = np.array(beat_vals, dtype=float)
             peaks = features.detect_peaks_series(
                 beat_vals,
@@ -529,11 +365,11 @@ def analyze_audio(
         if current_count > target_count * (1.0 + tolerance):
             min_duration = max(cfg.segment_min_duration_s, duration / target_count)
             seg_times = features.enforce_min_duration(seg_times, min_duration)
-    # Snap segment boundaries to bars then beats for better alignment.
+
     if bars:
         bar_starts = np.array([b["start"] for b in bars], dtype=float)
         seg_times = features.snap_times_to_peaks(seg_times, bar_starts, window_s=cfg.segment_snap_bar_window_s)
-    if beat_times.size:
+    if beat_times.size > 0:
         seg_times = features.snap_times_to_peaks(seg_times, beat_times, window_s=cfg.segment_snap_beat_window_s)
     seg_times = np.unique(seg_times)
     seg_times = features.enforce_min_duration(seg_times, cfg.segment_min_duration_s)
@@ -545,27 +381,28 @@ def analyze_audio(
             min_duration = max(cfg.segment_min_duration_s, duration / target_count)
             seg_times = features.enforce_min_duration(seg_times, min_duration)
 
-    seg_conf = features.sample_confidence(seg_times[:-1], combined if combined.size else onset_env, sr, hop_length=cfg.hop_length)
-    if progress_cb:
-        report_progress(85, "segments_seed")
+    seg_conf = features.sample_confidence(
+        seg_times[:-1], bundle.combined if bundle.combined.size else onset_env, sr, hop_length=cfg.hop_length
+    )
+    reporter.report(85, "segments_seed")
 
     db = features.rms_db(y, hop_length=cfg.hop_length)
-    times = features.frames_to_time(np.arange(len(db)), sr, hop_length=cfg.hop_length)
+    times = frames_to_time(np.arange(len(db)), sr, hop_length=cfg.hop_length)
 
     if cfg.timbre_mode == "pca":
         if cfg.timbre_pca_components and cfg.timbre_pca_mean:
             components = np.array(cfg.timbre_pca_components, dtype=float)
             mean = np.array(cfg.timbre_pca_mean, dtype=float)
-            if components.shape[1] == full_timbre.shape[0] and mean.shape[0] == full_timbre.shape[0]:
-                centered = full_timbre.T - mean
-                full_timbre = (centered @ components.T).T
-    elif cfg.timbre_standardize and full_timbre.size:
-        mean = np.mean(full_timbre, axis=1, keepdims=True)
-        std = np.std(full_timbre, axis=1, keepdims=True) + 1e-9
-        full_timbre = (full_timbre - mean) / std
-        full_timbre *= float(cfg.timbre_scale)
+            if components.shape[1] == bundle.full_timbre.shape[0] and mean.shape[0] == bundle.full_timbre.shape[0]:
+                centered = bundle.full_timbre.T - mean
+                bundle.full_timbre = (centered @ components.T).T
+    elif cfg.timbre_standardize and bundle.full_timbre.size:
+        mean = np.mean(bundle.full_timbre, axis=1, keepdims=True)
+        std = np.std(bundle.full_timbre, axis=1, keepdims=True) + EPS
+        bundle.full_timbre = (bundle.full_timbre - mean) / std
+        bundle.full_timbre *= float(cfg.timbre_scale)
 
-    segments = []
+    segments: list[dict[str, Any]] = []
     seg_total = max(1, len(seg_times) - 1)
     seg_step = max(1, seg_total // 20)
     for idx in range(len(seg_times) - 1):
@@ -573,10 +410,10 @@ def analyze_audio(
         end = float(seg_times[idx + 1])
         if end <= start:
             continue
-        start_frame, end_frame = _frame_slice(start, end, sr, cfg.hop_length)
-        frame_slice = slice(start_frame, min(end_frame, len(db)))
-        seg_db = db[frame_slice]
-        seg_times_local = times[frame_slice] - start
+        start_frame, end_frame = frame_slice(start, end, sr, cfg.hop_length)
+        frame_slice_view = slice(start_frame, min(end_frame, len(db)))
+        seg_db = db[frame_slice_view]
+        seg_times_local = times[frame_slice_view] - start
 
         if seg_db.size == 0:
             loud_start = -60.0
@@ -588,11 +425,13 @@ def analyze_audio(
             loud_max = float(seg_db[max_idx])
             loud_max_time = float(seg_times_local[max_idx]) if max_idx < len(seg_times_local) else 0.0
 
-        start_frame, end_frame = _frame_slice(start, end, sr, cfg.hop_length)
-        chroma_slice = full_chroma[:, start_frame:end_frame] if full_chroma.size else np.zeros((12, 0))
-        mfcc_start, mfcc_end = _frame_slice(start, end, sr, mfcc_hop_length)
+        start_frame, end_frame = frame_slice(start, end, sr, cfg.hop_length)
+        chroma_slice = bundle.full_chroma[:, start_frame:end_frame] if bundle.full_chroma.size else np.zeros((12, 0))
+        mfcc_start, mfcc_end = frame_slice(start, end, sr, bundle.mfcc_hop_length)
         timbre_slice = (
-            full_timbre[:, mfcc_start:mfcc_end] if full_timbre.size else np.zeros((cfg.mfcc_n_mfcc, 0))
+            bundle.full_timbre[:, mfcc_start:mfcc_end]
+            if bundle.full_timbre.size
+            else np.zeros((cfg.mfcc_n_mfcc, 0))
         )
 
         chroma = np.mean(chroma_slice, axis=1) if chroma_slice.size else np.zeros(12)
@@ -624,9 +463,9 @@ def analyze_audio(
                 "timbre": [float(v) for v in mfcc.tolist()],
             }
         )
-        if progress_cb and (idx + 1) % seg_step == 0:
+        if reporter.callback and (idx + 1) % seg_step == 0:
             ratio = (idx + 1) / seg_total
-            report_progress(85 + int(round(5 * ratio)), "segments_build")
+            reporter.report(85 + int(round(5 * ratio)), "segments_build")
 
     if cfg.pitch_scale and cfg.pitch_bias:
         if len(cfg.pitch_scale) == 12 and len(cfg.pitch_bias) == 12:
@@ -660,8 +499,7 @@ def analyze_audio(
 
     for segment in segments:
         _apply_segment_calibration(segment, cfg)
-    if progress_cb:
-        report_progress(90, "segments_final")
+    reporter.report(90, "segments_final")
 
     if cfg.start_offset_map_src and cfg.start_offset_map_dst:
         src = np.array(cfg.start_offset_map_src, dtype=float)
@@ -680,12 +518,25 @@ def analyze_audio(
         if cfg.segment_include_bounds:
             _fix_event_end(segments, duration)
 
-    # Sections
+    return segments, seg_times, beat_novelty_times
+
+
+def _compute_sections(
+    cfg: AnalysisConfig,
+    y: np.ndarray,
+    sr: int,
+    duration: float,
+    beat_times: np.ndarray,
+    bars: list[dict[str, Any]],
+    onset_env: np.ndarray,
+    bundle: FeatureBundle,
+    tempo: float,
+    reporter: ProgressReporter,
+) -> list[dict[str, Any]]:
     section_times = np.array([])
-    laplacian_seg_ids = None
     if cfg.use_laplacian_sections and beat_times.size >= 2:
-        beat_frames = features.time_to_frames(beat_times, sr, hop_length=cfg.hop_length)
-        beat_frames = np.unique(np.clip(beat_frames, 0, max(full_chroma.shape[1] - 1, 0)))
+        beat_frames = time_to_frames(beat_times, sr, cfg.hop_length)
+        beat_frames = np.unique(np.clip(beat_frames, 0, max(bundle.full_chroma.shape[1] - 1, 0)))
         bins_per_octave = int(cfg.laplacian_cqt_bins_per_octave)
         n_octaves = int(cfg.laplacian_cqt_octaves)
         n_bins = bins_per_octave * n_octaves
@@ -701,10 +552,10 @@ def analyze_audio(
         R = features.cosine_similarity_matrix(cqt_sync)
         Rf = scipy.ndimage.median_filter(R, size=(1, 7))
 
-        mfcc_sync = beat_mfcc if beat_mfcc.size else np.zeros((cfg.mfcc_n_mfcc, 0))
+        mfcc_sync = bundle.beat_mfcc if bundle.beat_mfcc.size else np.zeros((cfg.mfcc_n_mfcc, 0))
         path_distance = np.sum(np.diff(mfcc_sync, axis=1) ** 2, axis=0)
         sigma = float(np.median(path_distance)) if path_distance.size else 1.0
-        sigma = max(sigma, 1e-9)
+        sigma = max(sigma, EPS)
         path_sim = np.exp(-path_distance / sigma)
         R_path = np.diag(path_sim, k=1) + np.diag(path_sim, k=-1)
 
@@ -726,10 +577,9 @@ def analyze_audio(
         k = min(k, cfg.laplacian_max_clusters, evecs.shape[1], max(2, len(beat_times) - 1))
 
         if k >= 2:
-            X = evecs[:, :k] / (Cnorm[:, k - 1 : k] + 1e-9)
+            X = evecs[:, :k] / (Cnorm[:, k - 1 : k] + EPS)
             np.random.seed(0)
             _, seg_ids = kmeans2(X, k, minit="points", iter=20)
-            laplacian_seg_ids = np.array(seg_ids, dtype=int)
             changes = np.flatnonzero(np.diff(seg_ids)) + 1
             section_peaks = beat_times[changes]
             section_times = _segment_times(
@@ -740,9 +590,9 @@ def analyze_audio(
             )
             section_times = features.enforce_min_duration(section_times, cfg.section_min_spacing_s)
     else:
-        if cfg.section_use_novelty and combined.size:
+        if cfg.section_use_novelty and bundle.combined.size > 0:
             section_peaks = features.detect_peaks(
-                combined,
+                bundle.combined,
                 sr,
                 hop_length=cfg.hop_length,
                 percentile=cfg.section_novelty_percentile,
@@ -758,9 +608,9 @@ def analyze_audio(
                 )
             section_times = np.unique(section_times)
             section_times = features.enforce_min_duration(section_times, cfg.section_min_spacing_s)
-        if beat_times.size and section_novelty.size:
+        if beat_times.size > 0 and bundle.section_novelty.size > 0:
             section_peaks = features.detect_peaks_series(
-                section_novelty,
+                bundle.section_novelty,
                 percentile=cfg.section_selfsim_percentile,
                 min_distance=cfg.section_selfsim_min_spacing_beats,
             )
@@ -783,6 +633,7 @@ def analyze_audio(
 
     sections = []
     section_chroma = []
+    db = features.rms_db(y, hop_length=cfg.hop_length)
     section_total = max(1, len(section_times) - 1)
     section_step = max(1, section_total // 20)
     for idx in range(len(section_times) - 1):
@@ -790,7 +641,7 @@ def analyze_audio(
         end = float(section_times[idx + 1])
         if end <= start:
             continue
-        start_frame, end_frame = _frame_slice(start, end, sr, cfg.hop_length)
+        start_frame, end_frame = frame_slice(start, end, sr, cfg.hop_length)
         section_env = onset_env[start_frame:end_frame]
         if section_env.size:
             section_tempo = features.tempo_from_onset_env(
@@ -800,16 +651,18 @@ def analyze_audio(
                 min_bpm=cfg.tempo_min_bpm,
                 max_bpm=cfg.tempo_max_bpm,
             )
-            tempo_conf = float(np.mean(section_env / (np.max(section_env) + 1e-9)))
+            tempo_conf = float(np.mean(section_env / (np.max(section_env) + EPS)))
         else:
             section_tempo = float(tempo)
             tempo_conf = 0.0
-        chroma_section = np.mean(full_chroma[:, start_frame:end_frame], axis=1) if full_chroma.size else np.zeros(12)
+        chroma_section = (
+            np.mean(bundle.full_chroma[:, start_frame:end_frame], axis=1) if bundle.full_chroma.size else np.zeros(12)
+        )
         key, key_conf, mode, mode_conf = features.key_mode_from_chroma(chroma_section)
 
-        start_frame, end_frame = _frame_slice(start, end, sr, cfg.hop_length)
-        frame_slice = slice(start_frame, min(end_frame, len(db)))
-        loudness = float(np.mean(db[frame_slice])) if db.size else -60.0
+        start_frame, end_frame = frame_slice(start, end, sr, cfg.hop_length)
+        frame_slice_view = slice(start_frame, min(end_frame, len(db)))
+        loudness = float(np.mean(db[frame_slice_view])) if db.size else -60.0
 
         section_chroma.append(chroma_section)
         sections.append(
@@ -828,10 +681,10 @@ def analyze_audio(
                 "time_signature_confidence": 0.8,
             }
         )
-        if progress_cb and (idx + 1) % section_step == 0:
+        if reporter.callback and (idx + 1) % section_step == 0:
             ratio = (idx + 1) / section_total
-            report_progress(90 + int(round(5 * ratio)), "sections_build")
-    # Merge adjacent sections with near-identical chroma profiles.
+            reporter.report(90 + int(round(5 * ratio)), "sections_build")
+
     if cfg.section_merge_similarity > 0 and len(sections) > 1:
         merged_sections = []
         merged_chroma = []
@@ -870,17 +723,63 @@ def analyze_audio(
         sections = merged_sections
     if cfg.section_include_bounds:
         _fix_event_end(sections, duration)
-    if progress_cb:
-        report_progress(95, "sections")
+    reporter.report(95, "sections")
 
-    # Keep durations as derived; no forced normalization to track duration.
+    return sections
 
+
+def _build_track(path: str, duration: float, tempo: float, cfg: AnalysisConfig) -> dict[str, Any]:
     track = {
         "duration": round(duration, 5),
         "tempo": float(tempo),
         "time_signature": int(cfg.time_signature),
     }
     track.update(_read_track_metadata(path))
+    return track
+
+def analyze_audio(
+    path: str,
+    config: AnalysisConfig | None = None,
+    progress_cb: Callable[[int, str], None] | None = None,
+) -> dict[str, Any]:
+    cfg = config or AnalysisConfig()
+    reporter = ProgressReporter(progress_cb)
+    reporter.report(50, "load_audio")
+    y, sr = features.load_audio(path, sr=cfg.sample_rate)
+    y_beats = y
+    if cfg.percussive_beats_only:
+        y_beats = features.percussive_component(y, sr, hop_length=cfg.hop_length)
+        reporter.report(55, "percussive")
+    duration = float(len(y) / sr) if sr else 0.0
+    tempo, beat_times, onset_env, beats, bars, tatums, beat_conf = _compute_beats(
+        cfg, y_beats, sr, duration, reporter
+    )
+    bundle = _compute_feature_bundle(cfg, y, sr, beat_times, onset_env, reporter)
+    segments, seg_times, beat_novelty_times = _compute_segments(
+        cfg,
+        y,
+        sr,
+        duration,
+        beat_times,
+        bars,
+        onset_env,
+        bundle,
+        None,
+        reporter,
+    )
+    sections = _compute_sections(
+        cfg,
+        y,
+        sr,
+        duration,
+        beat_times,
+        bars,
+        onset_env,
+        bundle,
+        tempo,
+        reporter,
+    )
+    track = _build_track(path, duration, tempo, cfg)
 
     result = {
         "track": track,
@@ -891,6 +790,5 @@ def analyze_audio(
         "tatums": tatums,
     }
 
-    if progress_cb:
-        report_progress(100, "finalize")
+    reporter.report(100, "finalize")
     return _round_floats(_sanitize_small_values(result))
