@@ -10,13 +10,13 @@ import numpy as np
 from scipy import fftpack, signal
 
 from . import env
+from .constants import EPS
 
 
 DEFAULT_FRAME_LENGTH = 2048
 DEFAULT_HOP_LENGTH = 512
 DEFAULT_N_MELS = 24
 DEFAULT_N_MFCC = 12
-EPS = 1e-9
 MIN_RMS = 1e-12
 MIN_LOG_MEL = 1e-10
 
