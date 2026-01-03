@@ -3,7 +3,7 @@ import { BufferedAudioPlayer } from "../audio/BufferedAudioPlayer";
 import type { Edge } from "../engine/types";
 import { getElements } from "./elements";
 import { attachVisualizationResize, createVisualizations } from "./visualization";
-import { applyStoredTheme, applyTheme } from "./theme";
+import { applyTheme, applyThemeVariables, resolveStoredTheme } from "./theme";
 import { setAnalysisStatus, setLoadingProgress, isEditableTarget } from "./ui";
 import { navigateToTab, setActiveTab, updateTrackUrl } from "./tabs";
 import { handleRouteChange } from "./routing";
@@ -38,6 +38,12 @@ type SearchDeps = Parameters<typeof runSearch>[1];
 
 export function bootstrap() {
   const elements = getElements();
+  const initialTheme = resolveStoredTheme();
+  applyThemeVariables(initialTheme);
+  document.body.classList.toggle("theme-light", initialTheme === "light");
+  elements.themeLinks.forEach((link) => {
+    link.classList.toggle("active", link.dataset.theme === initialTheme);
+  });
   const player = new BufferedAudioPlayer();
   const engine = new JukeboxEngine(player, { randomMode: "random" });
   const visualizations = createVisualizations(elements.vizLayer);
@@ -117,7 +123,7 @@ export function bootstrap() {
   setActiveTabWithRefresh("top");
   elements.playTabButton.disabled = true;
   setAnalysisStatus(context, "Select a track to begin.", false);
-  applyStoredTheme(context);
+  applyTheme(context, initialTheme);
 
   resetForNewTrack(context);
   fetchTopSongsList().catch((err) => {

@@ -14,10 +14,7 @@
   <body>
     <div id="app">
       <header class="hero">
-        <div class="hero-top">
-          <div class="hero-title">
-            <h1 class="hero-title-neon">THE FOREVER JUKEBOX</h1>
-          </div>
+        <div class="hero-actions">
           <div class="theme-toggle" id="theme-toggle">
             <span>Theme:</span>
             <button type="button" class="theme-link" data-theme="light">
@@ -29,13 +26,18 @@
             </button>
           </div>
         </div>
+        <div class="hero-main">
+          <div class="hero-title">
+            <h1 class="hero-title-neon">THE FOREVER JUKEBOX</h1>
+          </div>
+          <nav class="tabs" aria-label="Primary">
+            <button class="tab-btn active" data-tab-button="top">Top Songs</button>
+            <button class="tab-btn" data-tab-button="search">Search</button>
+            <button class="tab-btn" data-tab-button="play" disabled>Listen</button>
+            <button class="tab-btn" data-tab-button="faq">FAQ</button>
+          </nav>
+        </div>
       </header>
-      <nav class="tabs" aria-label="Primary">
-        <button class="tab-btn active" data-tab-button="top">Top Songs</button>
-        <button class="tab-btn" data-tab-button="search">Search</button>
-        <button class="tab-btn" data-tab-button="play" disabled>Listen</button>
-        <button class="tab-btn" data-tab-button="faq">FAQ</button>
-      </nav>
       <section class="panel tab-panel" data-tab-panel="top">
         <div class="panel-title">Top 20</div>
         <ol class="top-list" id="top-songs">

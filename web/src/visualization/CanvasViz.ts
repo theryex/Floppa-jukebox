@@ -55,7 +55,6 @@ export class CanvasViz {
     beatFill: "rgba(255, 215, 130, 0.55)",
     edgeSelected: "#ff5b5b",
     beatHighlight: "#ffd46a",
-    beatJumpRgb: "255, 212, 106",
   };
 
   constructor(container: HTMLElement, positioner: Positioner) {
@@ -202,7 +201,7 @@ export class CanvasViz {
   }
 
   private updateTheme() {
-    const styles = getComputedStyle(document.body);
+    const styles = getComputedStyle(document.documentElement);
     this.theme.edgeStroke =
       styles.getPropertyValue("--edge-stroke").trim() || this.theme.edgeStroke;
     this.theme.beatFill =
@@ -213,9 +212,6 @@ export class CanvasViz {
     this.theme.beatHighlight =
       styles.getPropertyValue("--beat-highlight").trim() ||
       this.theme.beatHighlight;
-    this.theme.beatJumpRgb =
-      styles.getPropertyValue("--beat-jump-rgb").trim() ||
-      this.theme.beatJumpRgb;
   }
 
   private drawBase() {
@@ -277,7 +273,7 @@ export class CanvasViz {
         const to = this.positions[this.jumpLine.to];
         if (from && to) {
           const alpha = 1 - age / 1000;
-          const jumpColor = `rgba(${this.theme.beatJumpRgb}, ${alpha})`;
+          const jumpColor = this.resolveBeatJumpColor(alpha);
           if (this.shouldBendEdge(from, to)) {
             this.drawBentLine(this.overlayCtx, from, to, jumpColor, 2);
           } else {
@@ -293,6 +289,32 @@ export class CanvasViz {
         this.jumpLine = null;
       }
     }
+  }
+
+  private resolveBeatJumpColor(alpha: number) {
+    const color = this.theme.beatHighlight.trim();
+    if (color.startsWith("#")) {
+      const hex = color.slice(1);
+      const normalized =
+        hex.length === 3
+          ? hex
+              .split("")
+              .map((ch) => ch + ch)
+              .join("")
+          : hex.slice(0, 6);
+      const r = Number.parseInt(normalized.slice(0, 2), 16);
+      const g = Number.parseInt(normalized.slice(2, 4), 16);
+      const b = Number.parseInt(normalized.slice(4, 6), 16);
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+    const match = color.match(/rgba?\(([^)]+)\)/i);
+    if (match) {
+      const parts = match[1].split(",").map((value) => Number.parseFloat(value));
+      if (parts.length >= 3 && parts.every((value) => Number.isFinite(value))) {
+        return `rgba(${parts[0]}, ${parts[1]}, ${parts[2]}, ${alpha})`;
+      }
+    }
+    return color;
   }
 
   private handleCanvasClick = (event: MouseEvent) => {
