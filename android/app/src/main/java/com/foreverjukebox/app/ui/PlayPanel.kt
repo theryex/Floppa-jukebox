@@ -23,6 +23,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import com.foreverjukebox.app.ui.LocalThemeTokens
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -91,67 +92,79 @@ fun PlayPanel(state: UiState, viewModel: MainViewModel) {
             )
         }
 
-        if (playback.playTitle.isNotBlank()) {
-            Text(
-                text = playback.playTitle,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onBackground
-            )
-        }
-
         if (playback.audioLoaded && playback.analysisLoaded) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    onClick = { viewModel.togglePlayback() },
-                    contentPadding = SmallButtonPadding,
-                    modifier = Modifier.height(SmallButtonHeight)
-                ) {
-                    Text(if (playback.isRunning) "Stop" else "Play", style = MaterialTheme.typography.labelSmall)
-                }
-                OutlinedButton(
-                    onClick = { showTuning = true },
-                    contentPadding = SmallButtonPadding,
-                    modifier = Modifier.height(SmallButtonHeight)
-                ) {
-                    Text("Tune", style = MaterialTheme.typography.labelSmall)
-                }
-                IconButton(
-                    onClick = { showInfo = true },
-                    modifier = Modifier.size(SmallButtonHeight)
-                ) {
-                    Icon(
-                        Icons.Default.Info,
-                        contentDescription = "Info",
-                        tint = MaterialTheme.colorScheme.onBackground
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                if (playback.playTitle.isNotBlank()) {
+                    Text(
+                        text = playback.playTitle,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onBackground
                     )
                 }
-                IconButton(
-                    onClick = {
-                        val id = playback.lastYouTubeId ?: return@IconButton
-                        val url = "foreverjukebox://listen/$id"
-                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(Intent.EXTRA_TEXT, url)
-                        }
-                        context.startActivity(Intent.createChooser(shareIntent, "Share Forever Jukebox link"))
-                    },
-                    modifier = Modifier.size(SmallButtonHeight)
-                ) {
-                    Icon(
-                        Icons.Default.Share,
-                        contentDescription = "Share",
-                        tint = MaterialTheme.colorScheme.onBackground
-                    )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = { viewModel.togglePlayback() },
+                        colors = pillButtonColors(),
+                        border = pillButtonBorder(),
+                        shape = PillShape,
+                        contentPadding = SmallButtonPadding,
+                        modifier = Modifier.height(SmallButtonHeight)
+                    ) {
+                        Text(if (playback.isRunning) "Stop" else "Play", style = MaterialTheme.typography.labelSmall)
+                    }
+                    OutlinedButton(
+                        onClick = { showTuning = true },
+                        colors = pillOutlinedButtonColors(),
+                        border = pillButtonBorder(),
+                        shape = PillShape,
+                        contentPadding = SmallButtonPadding,
+                        modifier = Modifier.height(SmallButtonHeight)
+                    ) {
+                        Text("Tune", style = MaterialTheme.typography.labelSmall)
+                    }
+                    IconButton(
+                        onClick = { showInfo = true },
+                        modifier = Modifier.size(SmallButtonHeight)
+                    ) {
+                        Icon(
+                            Icons.Default.Info,
+                            contentDescription = "Info",
+                            tint = MaterialTheme.colorScheme.onBackground
+                        )
+                    }
+                    IconButton(
+                        onClick = {
+                            val id = playback.lastYouTubeId ?: return@IconButton
+                            val url = "foreverjukebox://listen/$id"
+                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_TEXT, url)
+                            }
+                            context.startActivity(Intent.createChooser(shareIntent, "Share Forever Jukebox link"))
+                        },
+                        modifier = Modifier.size(SmallButtonHeight)
+                    ) {
+                        Icon(
+                            Icons.Default.Share,
+                            contentDescription = "Share",
+                            tint = MaterialTheme.colorScheme.onBackground
+                        )
+                    }
                 }
-            }
-
-            Column(modifier = Modifier.fillMaxWidth()) {
+                val themeTokens = LocalThemeTokens.current
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(360.dp)
                         .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.surface)
+                        .background(themeTokens.vizBackground)
                 ) {
                     JukeboxVisualization(
                         data = playback.vizData,
@@ -167,6 +180,9 @@ fun PlayPanel(state: UiState, viewModel: MainViewModel) {
                     ) {
                         OutlinedButton(
                             onClick = { showVizMenu = true },
+                            colors = pillOutlinedButtonColors(),
+                            border = pillButtonBorder(),
+                            shape = PillShape,
                             contentPadding = SmallButtonPadding,
                             modifier = Modifier.height(SmallButtonHeight)
                         ) {
@@ -208,7 +224,6 @@ fun PlayPanel(state: UiState, viewModel: MainViewModel) {
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                     Text("Listen Time: ${playback.listenTime}", color = MaterialTheme.colorScheme.onBackground)
                     Text("Total Beats: ${playback.beatsPlayed}", color = MaterialTheme.colorScheme.onBackground)
@@ -256,8 +271,11 @@ private fun LoadingStatus(progress: Int?, label: String?) {
             modifier = Modifier.size(72.dp),
             contentAlignment = Alignment.Center
         ) {
+            val themeTokens = LocalThemeTokens.current
             CircularProgressIndicator(
                 modifier = Modifier.size(24.dp),
+                color = themeTokens.onBackground,
+                trackColor = themeTokens.onBackground.copy(alpha = 0.2f),
                 strokeWidth = 2.dp
             )
         }

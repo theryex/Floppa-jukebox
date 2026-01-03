@@ -1,9 +1,27 @@
 import type { AppContext } from "./context";
+import { themeConfig, type ThemeName } from "./themeConfig";
 
 const themeStorageKey = "fj-theme";
 
-export function applyTheme(context: AppContext, theme: "light" | "dark") {
+export function applyThemeVariables(theme: ThemeName) {
+  const themeVars = themeConfig[theme];
+  const rootStyle = document.documentElement.style;
+  Object.entries(themeVars).forEach(([key, value]) => {
+    rootStyle.setProperty(key, value);
+  });
+}
+
+export function resolveStoredTheme(): ThemeName {
+  const storedTheme = localStorage.getItem(themeStorageKey);
+  if (storedTheme === "light" || storedTheme === "dark") {
+    return storedTheme;
+  }
+  return "dark";
+}
+
+export function applyTheme(context: AppContext, theme: ThemeName) {
   const { elements, visualizations } = context;
+  applyThemeVariables(theme);
   document.body.classList.toggle("theme-light", theme === "light");
   elements.themeLinks.forEach((link) => {
     link.classList.toggle("active", link.dataset.theme === theme);
@@ -13,10 +31,5 @@ export function applyTheme(context: AppContext, theme: "light" | "dark") {
 }
 
 export function applyStoredTheme(context: AppContext) {
-  const storedTheme = localStorage.getItem(themeStorageKey);
-  if (storedTheme === "light" || storedTheme === "dark") {
-    applyTheme(context, storedTheme);
-  } else {
-    applyTheme(context, "dark");
-  }
+  applyTheme(context, resolveStoredTheme());
 }
