@@ -6,6 +6,7 @@ import {
   fetchAudio,
   fetchJobByYoutube,
   recordPlay,
+  repairJob,
   type AnalysisComplete,
   type AnalysisFailed,
   type AnalysisInProgress,
@@ -285,18 +286,32 @@ export function resetForNewTrack(context: AppContext) {
 
 export async function loadAudioFromJob(context: AppContext, jobId: string) {
   const { player, state } = context;
-  const buffer = await fetchAudio(jobId);
-  await player.decode(buffer);
-  state.audioLoaded = true;
-  state.audioLoadInFlight = false;
-  updateVizVisibility(context);
-  updateTrackInfo(context);
-  if (state.lastYouTubeId) {
-    updateCachedTrack(state.lastYouTubeId, { audio: buffer, jobId }).catch(
-      (err) => {
-        console.warn(`Cache save failed: ${String(err)}`);
+  try {
+    const buffer = await fetchAudio(jobId);
+    await player.decode(buffer);
+    state.audioLoaded = true;
+    state.audioLoadInFlight = false;
+    updateVizVisibility(context);
+    updateTrackInfo(context);
+    if (state.lastYouTubeId) {
+      updateCachedTrack(state.lastYouTubeId, { audio: buffer, jobId }).catch(
+        (err) => {
+          console.warn(`Cache save failed: ${String(err)}`);
+        }
+      );
+    }
+    return true;
+  } catch (err) {
+    const status = (err as Error & { status?: number }).status;
+    if (status === 404) {
+      try {
+        await repairJob(jobId);
+      } catch (repairErr) {
+        console.warn(`Repair failed: ${String(repairErr)}`);
       }
-    );
+    }
+    state.audioLoadInFlight = false;
+    return false;
   }
 }
 
@@ -403,18 +418,26 @@ export async function pollAnalysis(context: AppContext, deps: PlaybackDeps, jobI
           !state.audioLoadInFlight
         ) {
           state.audioLoadInFlight = true;
-          try {
-            await loadAudioFromJob(context, jobId);
-          } catch (_err) {
-            state.audioLoadInFlight = false;
-          }
+          await loadAudioFromJob(context, jobId);
         }
       } else if (isAnalysisFailed(response)) {
+        if (response.error === "Analysis missing") {
+          try {
+            await repairJob(jobId);
+            continue;
+          } catch (err) {
+            console.warn(`Repair failed: ${String(err)}`);
+          }
+        }
         deps.setAnalysisStatus("Loading failed.", false);
         throw new Error(response.error || "Analysis failed");
       } else if (isAnalysisComplete(response)) {
         if (!state.audioLoaded) {
-          await loadAudioFromJob(context, jobId);
+          const audioLoaded = await loadAudioFromJob(context, jobId);
+          if (!audioLoaded) {
+            await delay(ANALYSIS_POLL_INTERVAL_MS, controller.signal);
+            continue;
+          }
         }
         if (applyAnalysisResult(context, response)) {
           deps.setActiveTab("play");
@@ -457,7 +480,11 @@ export async function loadTrackByYouTubeId(
     }
     if (isAnalysisComplete(response) && response.id) {
       if (!context.state.audioLoaded) {
-        await loadAudioFromJob(context, response.id);
+        const audioLoaded = await loadAudioFromJob(context, response.id);
+        if (!audioLoaded) {
+          await pollAnalysis(context, deps, response.id);
+          return;
+        }
       }
       applyAnalysisResult(context, response);
       deps.setActiveTab("play");

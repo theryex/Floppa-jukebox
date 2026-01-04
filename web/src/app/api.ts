@@ -142,9 +142,25 @@ export async function fetchAudio(jobId: string, signal?: AbortSignal) {
     signal,
   });
   if (!response.ok) {
-    throw new Error(`Audio download failed (${response.status})`);
+    const error = new Error(`Audio download failed (${response.status})`);
+    (error as Error & { status?: number }).status = response.status;
+    throw error;
   }
   return response.arrayBuffer();
+}
+
+export async function repairJob(jobId: string, signal?: AbortSignal) {
+  const response = await fetch(`/api/repair/${encodeURIComponent(jobId)}`, {
+    method: "POST",
+    signal,
+  });
+  if (!response.ok) {
+    const error = new Error(`Repair failed (${response.status})`);
+    (error as Error & { status?: number }).status = response.status;
+    throw error;
+  }
+  const data = await response.json();
+  return parseAnalysisResponse(data);
 }
 
 export async function startYoutubeAnalysis(payload: {

@@ -194,6 +194,53 @@ def get_analysis(job_id: str) -> JSONResponse:
     return _job_response(job)
 
 
+@router.post("/api/repair/{job_id}")
+def repair_job(job_id: str, background_tasks: BackgroundTasks) -> JSONResponse:
+    job = get_job(DB_PATH, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job.status in {"downloading", "queued", "processing"}:
+        return _job_response(job)
+    if not job.youtube_id:
+        raise HTTPException(status_code=404, detail="Job is missing youtube_id")
+
+    audio_path = None
+    if job.input_path:
+        audio_path = abs_storage_path(STORAGE_ROOT, job.input_path)
+    if not audio_path or not audio_path.exists():
+        candidates = sorted((STORAGE_ROOT / "audio").glob(f"{job_id}.*"))
+        if candidates:
+            candidate = candidates[0]
+            relative_path = Path("audio") / candidate.name
+            update_job_input_path(DB_PATH, job_id, str(relative_path))
+            audio_path = candidate
+
+    analysis_path = abs_storage_path(STORAGE_ROOT, job.output_path)
+    audio_missing = not audio_path or not audio_path.exists()
+    analysis_missing = not analysis_path.exists()
+
+    if audio_missing:
+        set_job_progress(DB_PATH, job_id, 0)
+        set_job_status(DB_PATH, job_id, "downloading", None)
+        background_tasks.add_task(_download_youtube_audio, job_id, job.youtube_id)
+        job = get_job(DB_PATH, job_id)
+        return _job_response(job) if job else JSONResponse(
+            JobError(status="failed", error="Job not found", id=job_id, youtube_id=None).model_dump(),
+            status_code=404,
+        )
+
+    if analysis_missing:
+        set_job_progress(DB_PATH, job_id, 25)
+        set_job_status(DB_PATH, job_id, "queued", None)
+        job = get_job(DB_PATH, job_id)
+        return _job_response(job) if job else JSONResponse(
+            JobError(status="failed", error="Job not found", id=job_id, youtube_id=None).model_dump(),
+            status_code=404,
+        )
+
+    return _job_response(job)
+
+
 @router.post("/api/analysis/youtube")
 def create_analysis_youtube(
     background_tasks: BackgroundTasks, payload: dict = Body(...)
