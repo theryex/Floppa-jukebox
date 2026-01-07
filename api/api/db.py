@@ -243,7 +243,7 @@ def get_top_tracks(db_path: Path, limit: int = 10) -> list[dict]:
             "title": row[1],
             "artist": row[2],
             "youtube_id": row[3],
-            "plays": row[4],
+            "play_count": row[4],
         }
         for row in rows
     ]

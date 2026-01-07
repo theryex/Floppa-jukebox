@@ -8,7 +8,7 @@ npm run dev
 
 Audio is decoded into a single in-memory buffer before playback to avoid stalls on jumps,
 and jumps are scheduled at beat boundaries.
-Use the Tuning panel to adjust branching behavior (mirrors the legacy controls).
+Use the Tuning panel to adjust branching behavior.
 The visualization stays hidden until both audio and analysis files are loaded.
 Use the Visualization buttons (1–6) to switch layouts while audio continues.
 Audio results are cached locally in IndexedDB when available; browsers may evict cached
@@ -45,6 +45,7 @@ This app expects a JSON object with top-level arrays matching the analysis schem
 If the analysis file nests these arrays under `analysis`, that is also supported.
 
 This UI calls the API via the `/api` prefix (proxied by Vite).
+See `schema.json` at the repo root for the full analysis schema reference.
 
 ## Jump logic (high level)
 - Beats are the main playback unit.
@@ -55,15 +56,7 @@ This UI calls the API via the `/api` prefix (proxied by Vite).
   - jumps to a neighbor beat (branch), then continues from there.
 - A "last branch point" is computed to avoid dead-ends; that beat always branches.
 
-## Legacy mapping
-The new engine is based on the legacy jukebox logic in:
-- `/_includes/go-js.html`:
-  - `calculateNearestNeighborsForQuantum()`, `collectNearestNeighbors()`,
-    `insertBestBackwardBranch()`, `findBestLastBeat()`, `Driver()`
-- `/files/jremix.js`:
-  - `remixTrack()` preprocessing and `getPlayer()` playback
-
-New equivalents:
+## Core components
 - `web/src/engine/analysis.ts` preprocesses quanta + overlapping segments.
 - `web/src/engine/graph.ts` builds the jump graph and branch thresholds.
 - `web/src/engine/JukeboxEngine.ts` runs playback + random branching.

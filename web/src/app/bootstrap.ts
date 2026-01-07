@@ -126,9 +126,6 @@ export function bootstrap() {
   applyTheme(context, initialTheme);
 
   resetForNewTrack(context);
-  fetchTopSongsList().catch((err) => {
-    console.warn(`Top songs load failed: ${String(err)}`);
-  });
 
   handleRouteChange(context, playbackDeps, window.location.pathname).catch((err) => {
     console.warn(`Route load failed: ${String(err)}`);
