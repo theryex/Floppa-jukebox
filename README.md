@@ -44,6 +44,13 @@ Android (native app):
 2. Ensure the API + worker are running.
 3. Set the API base URL in the app (e.g. `http://10.0.2.2:8000` for emulator).
 
+Build debug APK:
+
+```bash
+cd android
+./gradlew assembleDebug
+```
+
 ## Docker (production)
 
 Build and run the container with Docker Compose (serves UI + API):
