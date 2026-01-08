@@ -40,16 +40,9 @@ Then open the web UI at `http://localhost:5173`.
 
 Android (native app):
 
-1. Open `android/` in Android Studio.
-2. Ensure the API + worker are running.
-3. Set the API base URL in the app (e.g. `http://10.0.2.2:8000` for emulator).
-
-Build debug APK:
-
-```bash
-cd android
-./gradlew assembleDebug
-```
+- [`Debug Release APK`](https://github.com/creightonlinza/forever-jukebox/releases/tag/android-debug-latest)
+- Must be pointed toward a running API and worker
+- Full source available in `android/`
 
 ## Docker (production)
 
