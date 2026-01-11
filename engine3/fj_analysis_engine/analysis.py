@@ -210,18 +210,29 @@ def analyze_audio(
                 b = np.asarray(timbre_map.get("b", [0.0] * 12))
                 seg["timbre"] = _apply_affine(np.asarray(seg["timbre"]), a, b).tolist()
             if loud_map:
-                la = float(loud_map.get("a", 1.0))
-                lb = float(loud_map.get("b", 0.0))
+                start_map = loud_map.get("start", {})
+                max_map = loud_map.get("max", {})
+                la = float(start_map.get("a", 1.0))
+                lb = float(start_map.get("b", 0.0))
+                ma = float(max_map.get("a", 1.0))
+                mb = float(max_map.get("b", 0.0))
                 seg["loudness_start"] = float(seg["loudness_start"] * la + lb)
-                seg["loudness_max"] = float(seg["loudness_max"] * la + lb)
+                seg["loudness_max"] = float(seg["loudness_max"] * ma + mb)
             if conf_map:
                 seg["confidence"] = float(_apply_confidence_mapping(
                     np.asarray([seg["confidence"]]), conf_map
                 )[0])
-            if pitch_map and "power" in pitch_map:
-                seg["pitches"] = _apply_pitch_power(
-                    np.asarray(seg["pitches"]), float(pitch_map["power"])
-                ).tolist()
+            if pitch_map:
+                power = float(pitch_map.get("power", 1.0))
+                weights = np.asarray(pitch_map.get("weights", [1.0] * 12), dtype=float)
+                pitches = np.asarray(seg["pitches"], dtype=float)
+                pitches = np.maximum(pitches, 0.0)
+                pitches = pitches ** power
+                pitches = pitches * weights
+                total = float(pitches.sum())
+                if total > 0:
+                    pitches = pitches / total
+                seg["pitches"] = pitches.tolist()
 
     beats = _make_quanta(beat_times, duration, confidence=[1.0] * len(beat_times))
 

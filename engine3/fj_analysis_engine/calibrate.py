@@ -149,8 +149,8 @@ def main() -> None:
     gold_loud_max_std = []
     gen_conf = []
     gold_conf = []
-    gold_segment_durations = []
-    gold_segments_per_second = []
+    gen_pitch_mean = []
+    gold_pitch_mean = []
 
     if args.batch:
         _set_batch_env()
@@ -196,11 +196,8 @@ def main() -> None:
 
             gen_conf.extend(gen["confidence"].tolist())
             gold_conf.extend(gold["confidence"].tolist())
-
-            gold_segment_durations.extend(gold["durations"].tolist())
-            duration = result.get("duration", 0.0)
-            if duration > 0:
-                gold_segments_per_second.append(result.get("segment_count", 0) / duration)
+            gen_pitch_mean.append(gen["pitch_mean"])
+            gold_pitch_mean.append(gold["pitch_mean"])
 
     print()
     gen_timbre_mean = np.mean(np.asarray(gen_timbre_mean), axis=0)
@@ -237,12 +234,31 @@ def main() -> None:
     gen_q = np.quantile(gen_conf, quantiles) if gen_conf.size else np.zeros_like(quantiles)
     gold_q = np.quantile(gold_conf, quantiles) if gold_conf.size else np.zeros_like(quantiles)
 
-    min_seg = float(np.median(gold_segment_durations)) if gold_segment_durations else 0.25
-    max_seg_rate = float(np.median(gold_segments_per_second)) if gold_segments_per_second else 2.5
-
     config = AnalysisConfig()
-    config.segmentation.min_segment_duration = max(0.1, min_seg * 0.5)
-    config.segmentation.max_segments_per_second = max(1.0, max_seg_rate * 1.5)
+
+    eps = 1e-6
+    if gen_pitch_mean and gold_pitch_mean:
+        gen_pitch = np.asarray(gen_pitch_mean, dtype=float)
+        gold_pitch = np.asarray(gold_pitch_mean, dtype=float)
+        g = np.maximum(gen_pitch, eps)
+        t = np.maximum(gold_pitch, eps)
+        g = g / np.sum(g, axis=1, keepdims=True)
+        t = t / np.sum(t, axis=1, keepdims=True)
+        log_w = np.mean(np.log(t) - np.log(g), axis=0)
+        weights = np.exp(log_w)
+        weights = weights / float(np.mean(weights))
+        best_p = 1.0
+        best_loss = float("inf")
+        for p in np.linspace(0.70, 1.30, 61):
+            pred = (g ** p) * weights
+            pred = pred / np.sum(pred, axis=1, keepdims=True)
+            loss = float(np.mean((pred - t) ** 2))
+            if loss < best_loss:
+                best_loss = loss
+                best_p = float(p)
+    else:
+        weights = np.ones(12, dtype=float)
+        best_p = 1.0
 
     calibration = {
         "createdAt": datetime.now(timezone.utc).isoformat(),
@@ -253,15 +269,23 @@ def main() -> None:
             "b": timbre_b.tolist(),
         },
         "loudness": {
-            "a": float((loud_start_a + loud_max_a)[0] / 2.0),
-            "b": float((loud_start_b + loud_max_b)[0] / 2.0),
+            "start": {
+                "a": float(loud_start_a[0]),
+                "b": float(loud_start_b[0]),
+            },
+            "max": {
+                "a": float(loud_max_a[0]),
+                "b": float(loud_max_b[0]),
+            },
         },
         "confidence": {
             "source": gen_q.tolist(),
             "target": gold_q.tolist(),
         },
         "pitch": {
-            "power": 1.0,
+            "power": best_p,
+            "weights": weights.tolist(),
+            "normalize": "l1",
         },
         "config": config.to_dict(),
     }
