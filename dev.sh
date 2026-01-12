@@ -84,7 +84,7 @@ resolve_python() {
     echo "FJ_PYTHON is set but not executable: $FJ_PYTHON"
     exit 1
   fi
-  for candidate in python3.12 python3.11 python3.10 python3; do
+  for candidate in python3.10 python3; do
     if command -v "$candidate" >/dev/null 2>&1; then
       PYTHON_BIN="$(command -v "$candidate")"
       return
@@ -167,7 +167,7 @@ ensure_web_deps() {
 }
 
 export GENERATOR_REPO="$ROOT/engine"
-export GENERATOR_CONFIG="$ROOT/engine/tuned_config.json"
+export GENERATOR_CONFIG="$ROOT/engine/calibration.json"
 
 pids=()
 

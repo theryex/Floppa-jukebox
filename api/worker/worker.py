@@ -100,7 +100,7 @@ def run_job(job_id: str, input_path: str, output_path: str) -> None:
         str(input_abs),
         "-o",
         str(output_abs),
-        "--config",
+        "--calibration",
         str(GENERATOR_CONFIG),
     ]
 
