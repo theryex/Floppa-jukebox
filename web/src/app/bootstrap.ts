@@ -145,8 +145,8 @@ export function bootstrap() {
         updateTrackUrl(youtubeId, replace),
       setAnalysisStatus: (message: string, spinning: boolean) =>
         setAnalysisStatus(context, message, spinning),
-      setLoadingProgress: (progress: number | null) =>
-        setLoadingProgress(context, progress),
+      setLoadingProgress: (progress: number | null, message?: string | null) =>
+        setLoadingProgress(context, progress, message),
     };
   }
 
@@ -161,8 +161,8 @@ export function bootstrap() {
         updateTrackUrl(youtubeId, replace),
       setAnalysisStatus: (message: string, spinning: boolean) =>
         setAnalysisStatus(context, message, spinning),
-      setLoadingProgress: (progress: number | null) =>
-        setLoadingProgress(context, progress),
+      setLoadingProgress: (progress: number | null, message?: string | null) =>
+        setLoadingProgress(context, progress, message),
       pollAnalysis: (jobId: string) => pollAnalysis(context, playbackDeps, jobId),
       applyAnalysisResult: (response) => applyAnalysisResult(context, response),
       loadAudioFromJob: (jobId: string) => loadAudioFromJob(context, jobId),

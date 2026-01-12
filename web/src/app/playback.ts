@@ -22,7 +22,7 @@ export type PlaybackDeps = {
   ) => void;
   updateTrackUrl: (youtubeId: string, replace?: boolean) => void;
   setAnalysisStatus: (message: string, spinning: boolean) => void;
-  setLoadingProgress: (progress: number | null) => void;
+  setLoadingProgress: (progress: number | null, message?: string | null) => void;
 };
 
 export function updateListenTimeDisplay(context: AppContext) {
@@ -411,7 +411,7 @@ export async function pollAnalysis(context: AppContext, deps: PlaybackDeps, jobI
       if (isAnalysisInProgress(response)) {
         const progress =
           typeof response.progress === "number" ? response.progress : null;
-        deps.setLoadingProgress(progress);
+        deps.setLoadingProgress(progress, response.message);
         if (
           response.status !== "downloading" &&
           !state.audioLoaded &&
@@ -439,6 +439,7 @@ export async function pollAnalysis(context: AppContext, deps: PlaybackDeps, jobI
             continue;
           }
         }
+        deps.setLoadingProgress(100, "Calculating pathways...");
         if (applyAnalysisResult(context, response)) {
           deps.setActiveTab("play");
           return;
@@ -463,7 +464,7 @@ export async function loadTrackByYouTubeId(
 ) {
   resetForNewTrack(context);
   deps.setActiveTab("play");
-  deps.setLoadingProgress(0);
+  deps.setLoadingProgress(null, "Fetching audio...");
   context.state.lastYouTubeId = youtubeId;
   await tryLoadCachedAudio(context, youtubeId);
   try {

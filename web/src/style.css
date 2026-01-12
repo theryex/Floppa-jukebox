@@ -638,9 +638,15 @@ button:hover {
 }
 
 .status-progress {
-  min-width: 44px;
+  min-width: 48px;
   font-weight: 600;
   color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.status-text {
+  flex: 1;
+  color: var(--muted);
 }
 
 .spinner {
