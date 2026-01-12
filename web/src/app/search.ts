@@ -21,7 +21,7 @@ export type SearchDeps = {
   ) => void;
   updateTrackUrl: (youtubeId: string, replace?: boolean) => void;
   setAnalysisStatus: (message: string, spinning: boolean) => void;
-  setLoadingProgress: (progress: number | null) => void;
+  setLoadingProgress: (progress: number | null, message?: string | null) => void;
   pollAnalysis: (jobId: string) => Promise<void>;
   applyAnalysisResult: (response: AnalysisComplete) => boolean;
   loadAudioFromJob: (jobId: string) => Promise<boolean>;
@@ -60,7 +60,7 @@ export async function startYoutubeAnalysisFlow(
   context.state.analysisLoaded = false;
   deps.updateVizVisibility();
   deps.setActiveTab("play");
-  deps.setLoadingProgress(0);
+  deps.setLoadingProgress(null, "Fetching audio...");
   context.state.lastYouTubeId = youtubeId;
   deps.updateTrackUrl(youtubeId);
   await tryLoadCachedAudio(context, youtubeId);
@@ -68,6 +68,11 @@ export async function startYoutubeAnalysisFlow(
   const response = await startYoutubeAnalysis(payload);
   if (!response || !response.id) {
     throw new Error("Invalid job response");
+  }
+  if (isAnalysisInProgress(response)) {
+    const progress =
+      typeof response.progress === "number" ? response.progress : null;
+    deps.setLoadingProgress(progress, response.message);
   }
   context.state.lastJobId = response.id;
   await deps.pollAnalysis(response.id);
@@ -153,7 +158,7 @@ export async function tryLoadExistingTrackByName(
     state.analysisLoaded = false;
     deps.updateVizVisibility();
     deps.setActiveTab("play");
-    deps.setLoadingProgress(0);
+    deps.setLoadingProgress(null, "Fetching audio...");
     state.lastYouTubeId = youtubeId;
     deps.updateTrackUrl(youtubeId);
     state.lastJobId = jobId;

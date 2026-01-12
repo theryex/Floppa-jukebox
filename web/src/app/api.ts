@@ -21,6 +21,7 @@ export type AnalysisInProgress = AnalysisBase & {
   status: "downloading" | "queued" | "processing";
   id: string;
   progress?: number;
+  message?: string;
 };
 
 export type AnalysisResult = Record<string, unknown> & {
@@ -83,11 +84,12 @@ function parseAnalysisResponse(data: unknown): AnalysisResponse | null {
   const youtubeId =
     typeof data.youtube_id === "string" ? data.youtube_id : undefined;
   const progress = typeof data.progress === "number" ? data.progress : undefined;
+  const message = typeof data.message === "string" ? data.message : undefined;
   if (status === "downloading" || status === "queued" || status === "processing") {
     if (!id) {
       return null;
     }
-    return { status, id, progress, youtube_id: youtubeId };
+    return { status, id, progress, message, youtube_id: youtubeId };
   }
   if (status === "failed") {
     return {

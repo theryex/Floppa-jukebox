@@ -15,9 +15,13 @@ export function setAnalysisStatus(
   }
 }
 
-export function setLoadingProgress(context: AppContext, progress: number | null) {
+export function setLoadingProgress(
+  context: AppContext,
+  progress: number | null,
+  message?: string | null
+) {
   const { elements } = context;
-  elements.analysisStatus.textContent = "Loading";
+  elements.analysisStatus.textContent = message?.trim() || "Loading";
   elements.analysisSpinner.classList.remove("hidden");
   if (typeof progress === "number") {
     elements.analysisProgress.textContent = `${Math.round(progress)}%`;
