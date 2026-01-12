@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Dict, Any, List, Optional
+import threading
+from typing import Dict, Any, List, Optional, Callable
 
 import numpy as np
 
@@ -132,7 +133,21 @@ def analyze_audio(
     audio_path: str,
     calibration_path: Optional[str] = None,
     batch: bool = False,
+    progress_cb: Optional[Callable[[int, str], None]] = None,
 ) -> Dict[str, Any]:
+    last_reported = -1
+
+    def report(percent: float, stage: str) -> None:
+        nonlocal last_reported
+        if not progress_cb:
+            return
+        pct = int(round(percent))
+        pct = max(0, min(100, pct))
+        if pct <= last_reported:
+            return
+        last_reported = pct
+        progress_cb(pct, stage)
+
     config = AnalysisConfig()
     calibration = None
     if calibration_path:
@@ -141,14 +156,34 @@ def analyze_audio(
         if config_data:
             config = AnalysisConfig.from_dict(config_data)
 
+    report(0, "decode")
     audio, sample_rate = decode_audio(audio_path, sample_rate=config.features.sample_rate)
     duration = len(audio) / sample_rate if sample_rate else 0.0
 
-    beat_times, beat_numbers = extract_beats(audio, sample_rate, batch=batch)
+    report(10, "beats")
+    beat_stop = threading.Event()
+    beat_thread = None
+    if progress_cb and duration > 0:
+        def beat_heartbeat() -> None:
+            next_progress = 15
+            while not beat_stop.is_set() and next_progress < 80:
+                if beat_stop.wait(2.0):
+                    break
+                report(next_progress, "beats")
+                next_progress += 5
+        beat_thread = threading.Thread(target=beat_heartbeat, daemon=True)
+        beat_thread.start()
+    try:
+        beat_times, beat_numbers = extract_beats(audio, sample_rate, batch=batch)
+    finally:
+        if beat_thread:
+            beat_stop.set()
+            beat_thread.join(0.1)
     if not beat_times:
         beat_times = [0.0]
         beat_numbers = [1]
 
+    report(80, "features")
     frame_features = compute_frame_features(audio, config.features)
     novelty = compute_novelty(
         frame_features["mfcc"],
@@ -165,7 +200,8 @@ def analyze_audio(
     )
 
     segments = []
-    for i in range(len(boundaries) - 1):
+    total_segments = max(len(boundaries) - 1, 1)
+    for i in range(total_segments):
         start = boundaries[i]
         end = boundaries[i + 1]
         times = frame_features["frame_times"]
@@ -300,6 +336,7 @@ def analyze_audio(
     tempo = float(np.median(tempos)) if tempos else 0.0
 
     analysis = {
+        "engine_version": 2,
         "sections": sections,
         "bars": bars,
         "beats": beats,
@@ -312,6 +349,7 @@ def analyze_audio(
         },
     }
 
+    report(100, "features")
     return analysis
 
 

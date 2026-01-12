@@ -25,12 +25,9 @@ def main() -> None:
         print(f"PROGRESS:{percent}:{stage}", flush=True)
 
     progress_cb = progress_printer if os.environ.get("FJ_PROGRESS") == "1" else None
+    analysis_progress = progress_cb
 
-    if progress_cb:
-        progress_cb(50, "start")
-    data = analyze_audio(args.input, calibration_path=args.calibration)
-    if progress_cb:
-        progress_cb(80, "analyzed")
+    data = analyze_audio(args.input, calibration_path=args.calibration, progress_cb=analysis_progress)
     data = quantize_analysis(data)
 
     output_path = Path(args.output) if args.output else None

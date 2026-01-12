@@ -4,7 +4,7 @@ This package generates analysis JSON compatible with `schema.json` and the Forev
 
 ## Setup
 
-This engine stack expects Python 3.10. Anything above has some dependency compatibility issues.
+This engine stack expects Python 3.10. Anything above has some dependency compatibility issues from madmom.
 
 ```bash
 python3 -m venv .venv
