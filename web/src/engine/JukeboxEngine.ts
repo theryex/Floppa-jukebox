@@ -24,6 +24,9 @@ const DEFAULT_CONFIG: JukeboxConfig = {
   minLongBranch: 0,
 };
 
+const TICK_INTERVAL_MS = 50;
+const RESYNC_TOLERANCE_SECONDS = 0.05;
+
 type UpdateListener = (state: JukeboxState) => void;
 
 export interface JukeboxEngineOptions {
@@ -57,6 +60,7 @@ export class JukeboxEngine {
   private lastJumped = false;
   private lastJumpTime: number | null = null;
   private lastJumpFromIndex: number | null = null;
+  private lastTickTime: number | null = null;
   private forceBranch = false;
   private deletedEdgeKeys = new Set<string>();
   private rng: () => number;
@@ -219,26 +223,31 @@ export class JukeboxEngine {
     this.lastJumped = false;
     this.lastJumpTime = null;
     this.lastJumpFromIndex = null;
+    this.lastTickTime = null;
   }
 
   private tick() {
     if (!this.ticking || !this.analysis) {
       return;
     }
-    this.timerId = window.setTimeout(() => this.tick(), 50);
+    this.timerId = window.setTimeout(() => this.tick(), TICK_INTERVAL_MS);
     if (!this.player.isPlaying()) {
       this.emitState(false);
+      this.lastTickTime = null;
       return;
     }
 
     const currentTime = this.player.getCurrentTime();
+    const lastTickTime = this.lastTickTime;
+    this.lastTickTime = currentTime;
     if (
       this.currentBeatIndex < 0 ||
-      currentTime < this.beats[this.currentBeatIndex].start ||
+      currentTime <
+        this.beats[this.currentBeatIndex].start - RESYNC_TOLERANCE_SECONDS ||
       currentTime >
         this.beats[this.currentBeatIndex].start +
           this.beats[this.currentBeatIndex].duration +
-          0.2
+          RESYNC_TOLERANCE_SECONDS
     ) {
       this.currentBeatIndex = this.findBeatIndexByTime(currentTime);
       if (this.currentBeatIndex >= 0) {
@@ -250,7 +259,9 @@ export class JukeboxEngine {
 
     if (
       this.currentBeatIndex >= 0 &&
-      currentTime >= this.nextTransitionTime - 0.02
+      lastTickTime !== null &&
+      lastTickTime < this.nextTransitionTime &&
+      currentTime >= this.nextTransitionTime
     ) {
       this.advanceBeat();
     }
