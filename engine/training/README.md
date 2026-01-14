@@ -6,7 +6,7 @@ baseline analyses. It matches files by stem between `audio/` and `analysis/`.
 Usage:
 
 ```bash
-python -m engine.training.calibrate \
+python engine/training/calibrate.py \
   --audio-dir engine/training/audio \
   --analysis-dir engine/training/analysis \
   --output engine/calibration.json \
