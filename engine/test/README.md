@@ -11,7 +11,8 @@ Run with engine generation:
 python engine/test/compare.py \
   --benchmark /path/to/benchmark.json \
   --audio /path/to/track.m4a \
-  --calibration engine/calibration.json
+  --calibration engine/calibration.json \
+  --dump
 ```
 
 Run with two analysis JSON files:
@@ -19,10 +20,11 @@ Run with two analysis JSON files:
 ```bash
 python engine/test/compare.py \
   --benchmark /path/to/benchmark.json \
-  --compare /path/to/analysis.json
+  --compare /path/to/analysis.json \
+  --dump
 ```
 
 Notes:
 - `--benchmark` is required.
 - Pass exactly one of `--audio` or `--compare`.
-- Output prints similarity and component scores to stdout.
+- Output always prints similarity; `--dump` prints component scores.

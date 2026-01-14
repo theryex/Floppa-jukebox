@@ -258,6 +258,8 @@ def load_analysis(path: Path) -> dict:
         data = json.load(handle)
     if "analysis" in data:
         return data["analysis"]
+    if "result" in data:
+        return data["result"]
     return data
 
 
@@ -272,6 +274,7 @@ def main() -> None:
     parser.add_argument("--audio", help="Path to audio file to analyze and compare")
     parser.add_argument("--compare", help="Path to analysis JSON to compare (skip engine)")
     parser.add_argument("--calibration", default=None, help="Path to calibration JSON bundle")
+    parser.add_argument("--dump", action="store_true", help="Print component scores")
     args = parser.parse_args()
 
     benchmark_path = Path(args.benchmark)
@@ -291,18 +294,19 @@ def main() -> None:
     result = compare_analysis(benchmark, generated)
 
     print(f"similarity={result['similarity']:.2f}%")
-    print(f"threshold score={result['scores']['threshold']:.3f}")
-    print(f"branching score={result['scores']['branching']:.3f}")
-    print(f"histogram score={result['scores']['histogram']:.3f}")
-    print(f"edges score={result['scores']['edges']:.3f}")
-    print(f"gold threshold={result['gold']['computed_threshold']}")
-    print(f"gen threshold={result['generated']['computed_threshold']}")
-    print(f"gold branching={result['gold']['branching_fraction']:.3f}")
-    print(f"gen branching={result['generated']['branching_fraction']:.3f}")
-    print(f"gold hist={result['gold']['neighbor_hist']}")
-    print(f"gen hist={result['generated']['neighbor_hist']}")
-    print(f"gold median distance={result['gold']['median_distance']:.3f}")
-    print(f"gen median distance={result['generated']['median_distance']:.3f}")
+    if args.dump:
+        print(f"threshold score={result['scores']['threshold']:.3f}")
+        print(f"branching score={result['scores']['branching']:.3f}")
+        print(f"histogram score={result['scores']['histogram']:.3f}")
+        print(f"edges score={result['scores']['edges']:.3f}")
+        print(f"gold threshold={result['gold']['computed_threshold']}")
+        print(f"gen threshold={result['generated']['computed_threshold']}")
+        print(f"gold branching={result['gold']['branching_fraction']:.3f}")
+        print(f"gen branching={result['generated']['branching_fraction']:.3f}")
+        print(f"gold hist={result['gold']['neighbor_hist']}")
+        print(f"gen hist={result['generated']['neighbor_hist']}")
+        print(f"gold median distance={result['gold']['median_distance']:.3f}")
+        print(f"gen median distance={result['generated']['median_distance']:.3f}")
 
 
 if __name__ == "__main__":
