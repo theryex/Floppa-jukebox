@@ -70,7 +70,7 @@ def _message_for_progress(status: str, progress: int | None) -> str | None:
         return None
     if progress is None or progress < 10:
         return "Processing"
-    if progress < 80:
+    if progress < 90:
         return "Analyzing"
     return "Wrapping up"
 

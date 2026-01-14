@@ -168,7 +168,7 @@ def analyze_audio(
             extra_minutes = max(0.0, (duration - 180.0) / 60.0)
             wait_s = 2.0 + (0.75 * extra_minutes)
             next_progress = 15
-            while not beat_stop.is_set() and next_progress < 80:
+            while not beat_stop.is_set() and next_progress < 85:
                 if beat_stop.wait(wait_s):
                     break
                 report(next_progress, "beats")
@@ -185,7 +185,7 @@ def analyze_audio(
         beat_times = [0.0]
         beat_numbers = [1]
 
-    report(80, "features")
+    report(90, "features")
     frame_features = compute_frame_features(audio, config.features)
     novelty = compute_novelty(
         frame_features["mfcc"],
