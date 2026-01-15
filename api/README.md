@@ -25,7 +25,9 @@ Set API keys:
 export SPOTIFY_CLIENT_ID=...
 export SPOTIFY_CLIENT_SECRET=...
 export YOUTUBE_API_KEY=...
-export DELETE_JOB_KEY=...
+export ADMIN_KEY=...
+export ALLOW_USER_UPLOAD=true
+export ALLOW_USER_YOUTUBE=true
 ```
 
 ## Run the API
@@ -66,10 +68,16 @@ Search YouTube (closest matches by duration):
 curl "/api/search/youtube?q=daft%20punk&target_duration=210"
 ```
 
-Create analysis from YouTube:
+Create analysis from YouTube (requires `ALLOW_USER_YOUTUBE=true` for user-supplied jobs):
 
 ```bash
-curl -X POST "/api/analysis/youtube" -H "Content-Type: application/json" -d '{"youtube_id":"dQw4w9WgXcQ"}'
+curl -X POST "/api/analysis/youtube" -H "Content-Type: application/json" -d '{"youtube_id":"dQw4w9WgXcQ","is_user_supplied":true}'
+```
+
+Upload audio (requires `ALLOW_USER_UPLOAD=true`, max 15MB, m4a/webm/mp3/wav/flac/ogg/aac):
+
+```bash
+curl -X POST "/api/upload" -F "file=@/path/to/audio.m4a"
 ```
 
 Fetch audio for a job:
@@ -105,10 +113,14 @@ curl "/api/top?limit=20"
 Delete a job and its stored files:
 
 ```bash
-curl -X DELETE "/api/jobs/<id>?key=$DELETE_JOB_KEY"
+curl -X DELETE "/api/jobs/<id>?key=$ADMIN_KEY"
 ```
 
-You can also pass the key as an `X-Delete-Track-Key` header instead of the query string.
+Within 30 minutes of creation/completion, the delete key is not required:
+
+```bash
+curl -X DELETE "/api/jobs/<id>"
+```
 
 ## Storage
 

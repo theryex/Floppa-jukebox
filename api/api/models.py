@@ -65,6 +65,10 @@ class PlayCountResponse(BaseModel):
     play_count: int
 
 
+class PlayCountUpdate(BaseModel):
+    play_count: int
+
+
 class AnalysisStartResponse(BaseModel):
     id: str
     status: str
