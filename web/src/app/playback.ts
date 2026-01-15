@@ -62,6 +62,7 @@ export function updateVizVisibility(context: AppContext) {
     elements.playMenu.classList.remove("hidden");
     elements.vizPanel.classList.remove("hidden");
     elements.playButton.classList.remove("hidden");
+    updatePlayButton(context, state.isRunning);
     elements.playTabButton.disabled = false;
     visualizations[state.activeVizIndex]?.resizeNow();
     elements.vizButtons.forEach((button) => {
@@ -199,7 +200,7 @@ export function stopPlayback(context: AppContext) {
   state.isRunning = false;
   stopListenTimer(context);
   updateListenTimeDisplay(context);
-  elements.playButton.textContent = "Play";
+  updatePlayButton(context, false);
 }
 
 export function togglePlayback(context: AppContext) {
@@ -229,7 +230,7 @@ export function togglePlayback(context: AppContext) {
       state.lastPlayStamp = performance.now();
       state.isRunning = true;
       startListenTimer(context);
-      elements.playButton.textContent = "Stop";
+      updatePlayButton(context, true);
       if (document.fullscreenElement) {
         requestWakeLock(context);
       }
@@ -239,6 +240,20 @@ export function togglePlayback(context: AppContext) {
   } else {
     stopPlayback(context);
   }
+}
+
+function updatePlayButton(context: AppContext, isRunning: boolean) {
+  const label = isRunning ? "Stop" : "Play";
+  const icon = context.elements.playButton.querySelector<HTMLSpanElement>(".play-icon");
+  const text = context.elements.playButton.querySelector<HTMLSpanElement>(".play-text");
+  if (icon) {
+    icon.textContent = isRunning ? "stop" : "play_arrow";
+  }
+  if (text) {
+    text.textContent = label;
+  }
+  context.elements.playButton.title = label;
+  context.elements.playButton.setAttribute("aria-label", label);
 }
 
 export function resetForNewTrack(context: AppContext) {
@@ -258,6 +273,7 @@ export function resetForNewTrack(context: AppContext) {
   state.lastBeatIndex = null;
   updateListenTimeDisplay(context);
   elements.beatsPlayedEl.textContent = "0";
+  elements.vizNowPlayingEl.textContent = "The Forever Jukebox";
   if (elements.tuningModal.classList.contains("open")) {
     elements.tuningModal.classList.remove("open");
   }
@@ -367,11 +383,12 @@ export function applyAnalysisResult(
       ? track.duration
       : null;
   if (title || artist) {
-    elements.playTitle.textContent = artist
-      ? `${title ?? "Unknown"} — ${artist}`
-      : `${title}`;
+    const displayTitle = artist ? `${title ?? "Unknown"} — ${artist}` : `${title}`;
+    elements.playTitle.textContent = displayTitle;
+    elements.vizNowPlayingEl.textContent = displayTitle;
   } else {
     elements.playTitle.textContent = "";
+    elements.vizNowPlayingEl.textContent = "The Forever Jukebox";
   }
   updateTrackInfo(context);
   const jobId = response.id || state.lastJobId;
