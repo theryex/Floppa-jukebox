@@ -192,6 +192,10 @@ export function getElements() {
     document.querySelector<HTMLButtonElement>("#retro-toggle"),
     "#retro-toggle"
   );
+  const canonizerToggle = requireElement(
+    document.querySelector<HTMLButtonElement>("#canonizer-toggle"),
+    "#canonizer-toggle"
+  );
 
   return {
     listenTimeEl,
@@ -242,5 +246,6 @@ export function getElements() {
     topSongsList,
     vizStats,
     retroToggleButton,
+    canonizerToggle,
   };
 }
