@@ -3,9 +3,9 @@
 # =============================================================================
 #
 # Usage:
-#   CPU:  docker compose up -d
-#   CUDA: GPU_MODE=cuda docker compose up -d --build
-#   ROCm: GPU_MODE=rocm docker compose up -d --build
+#   CPU:  docker compose --profile cpu up -d
+#   CUDA: docker compose --profile nvidia up -d --build
+#   ROCm: docker compose --profile amd up -d --build
 #
 # Calibration:
 #   Set CALIBRATION_MODE=upstream to use calibration.json (simpler format)
@@ -52,6 +52,8 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+    profiles:
+      - cpu
 
   # =============================================================================
   # GPU Profiles
