@@ -11,4 +11,7 @@ __pycache__/
 .env
 
 # Fly.io
-*.toml
+fly.toml
+
+# Reference code (not part of project)
+EternalJukebox/
