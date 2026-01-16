@@ -3,6 +3,8 @@ import type { BufferedAudioPlayer } from "../audio/BufferedAudioPlayer";
 import type { CanvasViz } from "../visualization/CanvasViz";
 import type { Edge } from "../engine/types";
 import type { getElements } from "./elements";
+import type { CanonizerEngine } from "../engine/CanonizerEngine";
+import type { CanonizerPlayer } from "../audio/CanonizerPlayer";
 
 export type TabId = "top" | "search" | "play" | "faq";
 
@@ -31,6 +33,10 @@ export type AppState = {
   pollController: AbortController | null;
   listenTimerId: number | null;
   wakeLock: WakeLockSentinel | null;
+  // Canonizer state
+  canonizerEnabled: boolean;
+  canonizerBeatIndex: number;
+  canonizerTimerId: number | null;
 };
 
 export type AppContext = {
@@ -40,4 +46,7 @@ export type AppContext = {
   visualizations: CanvasViz[];
   defaultConfig: ReturnType<JukeboxEngine["getConfig"]>;
   state: AppState;
+  // Canonizer instances
+  canonizerEngine: CanonizerEngine;
+  canonizerPlayer: CanonizerPlayer;
 };
