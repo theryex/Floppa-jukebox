@@ -24,6 +24,7 @@ from ..db import (
     set_job_progress,
     set_job_status,
     update_job_input_path,
+    update_job_track_metadata,
 )
 from ..models import (
     AnalysisStartResponse,
@@ -106,7 +107,12 @@ def _message_for_progress(status: str, progress: int | None) -> str | None:
 
 
 def _job_response(job) -> JSONResponse:
-    base_payload = {"id": job.id, "youtube_id": job.youtube_id, "created_at": job.created_at}
+    base_payload = {
+        "id": job.id,
+        "youtube_id": job.youtube_id,
+        "created_at": job.created_at,
+        "is_user_supplied": bool(job.is_user_supplied),
+    }
     if job.status in {"queued", "processing", "downloading"}:
         progress = job.progress if job.status == "processing" else None
         message = _message_for_progress(job.status, progress)
@@ -222,6 +228,15 @@ def _download_youtube_audio(job_id: str, youtube_id: str) -> None:
     except Exception as exc:  # pragma: no cover - network call
         _cleanup_failure(job_id, str(exc))
         return
+
+    job = get_job(DB_PATH, job_id)
+    if job and job.is_user_supplied and (not job.track_title or not job.track_title.strip()):
+        if isinstance(info, dict):
+            info_title = info.get("title")
+            if isinstance(info_title, str) and info_title.strip():
+                update_job_track_metadata(
+                    DB_PATH, job_id, _sanitize_title(info_title), ""
+                )
 
     input_path = None
     if isinstance(info, dict):

@@ -8,7 +8,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from ..models import AppConfigResponse
-from .jobs import MAX_UPLOAD_BYTES
+from .jobs import ALLOWED_UPLOAD_EXTS, MAX_UPLOAD_BYTES
 
 router = APIRouter()
 
@@ -18,7 +18,7 @@ def _is_enabled(env_key: str) -> bool:
     return value.lower() in {"1", "true", "yes", "on"}
 
 
-@router.get("/app-config")
+@router.get("/api/app-config")
 def get_app_config() -> JSONResponse:
     allow_user_upload = _is_enabled("ALLOW_USER_UPLOAD")
     max_upload_size = MAX_UPLOAD_BYTES if allow_user_upload else None

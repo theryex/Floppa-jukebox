@@ -15,14 +15,22 @@ import {
 } from "./ui";
 import { navigateToTab, setActiveTab, updateTrackUrl } from "./tabs";
 import { handleRouteChange } from "./routing";
-import { deleteJob, fetchAppConfig, fetchTopSongs } from "./api";
-import { deleteCachedTrack, saveAppConfig } from "./cache";
+import {
+  deleteJob,
+  fetchAppConfig,
+  fetchTopSongs,
+  startYoutubeAnalysis,
+  uploadAudio,
+  type AnalysisComplete,
+} from "./api";
+import { deleteCachedTrack, loadAppConfig, saveAppConfig } from "./cache";
 import {
   applyAnalysisResult,
   applyTuningChanges,
   closeInfo,
   closeTuning,
   loadAudioFromJob,
+  loadTrackByJobId,
   loadTrackByYouTubeId,
   openInfo,
   openTuning,
@@ -38,6 +46,7 @@ import {
 import { runSearch } from "./search";
 import { TOP_SONGS_LIMIT } from "./constants";
 import type { AppContext, AppState, TabId } from "./context";
+import type { AppConfig } from "./api";
 import {
   addFavorite,
   isFavorite,
@@ -92,6 +101,8 @@ export function bootstrap() {
     toastTimer: null,
     deleteEligible: false,
     deleteEligibilityJobId: null,
+    searchTab: "search",
+    appConfig: null,
     pollController: null,
     listenTimerId: null,
     wakeLock: null,
@@ -151,8 +162,20 @@ export function bootstrap() {
   fetchTopSongsList().catch((err) => {
     console.warn(`Top songs load failed: ${String(err)}`);
   });
+  loadAppConfig()
+    .then((config) => {
+      if (config) {
+        applyAppConfig(config as AppConfig);
+      }
+    })
+    .catch((err) => {
+      console.warn(`App config load failed: ${String(err)}`);
+    });
   fetchAppConfig()
-    .then((config) => saveAppConfig(config))
+    .then((config) => {
+      applyAppConfig(config);
+      return saveAppConfig(config);
+    })
     .catch((err) => {
       console.warn(`App config fetch failed: ${String(err)}`);
     });
@@ -185,6 +208,7 @@ export function bootstrap() {
       setLoadingProgress: (progress: number | null, message?: string | null) =>
         setLoadingProgress(context, progress, message),
       onTrackChange: () => syncFavoriteButton(),
+      onAnalysisLoaded: (response) => maybeAutoFavoriteUserSupplied(response),
     };
   }
 
@@ -203,7 +227,8 @@ export function bootstrap() {
         setLoadingProgress(context, progress, message),
       pollAnalysis: (jobId: string) =>
         pollAnalysis(context, playbackDeps, jobId),
-      applyAnalysisResult: (response) => applyAnalysisResult(context, response),
+      applyAnalysisResult: (response) =>
+        applyAnalysisResult(context, response, maybeAutoFavoriteUserSupplied),
       loadAudioFromJob: (jobId: string) => loadAudioFromJob(context, jobId),
       resetForNewTrack: () => resetForNewTrack(context),
       updateVizVisibility: () => updateVizVisibility(context),
@@ -228,6 +253,11 @@ export function bootstrap() {
     });
     elements.searchButton.addEventListener("click", handleSearchClick);
     elements.searchInput.addEventListener("keydown", handleSearchKeydown);
+    elements.searchSubtabButtons.forEach((button) => {
+      button.addEventListener("click", handleSearchSubtabClick);
+    });
+    elements.uploadFileButton.addEventListener("click", handleUploadFileClick);
+    elements.uploadYoutubeButton.addEventListener("click", handleUploadYoutubeClick);
     elements.thresholdInput.addEventListener("input", handleThresholdInput);
     elements.minProbInput.addEventListener("input", handleMinProbInput);
     elements.maxProbInput.addEventListener("input", handleMaxProbInput);
@@ -276,11 +306,64 @@ export function bootstrap() {
       tabId === "top" ? "Top 20" : "Favorites";
   }
 
+  function setSearchTab(tabId: "search" | "upload") {
+    state.searchTab = tabId;
+    elements.searchSubtabButtons.forEach((button) => {
+      button.classList.toggle("active", button.dataset.searchSubtab === tabId);
+    });
+    elements.searchPanel.classList.toggle("hidden", tabId !== "search");
+    elements.uploadPanel.classList.toggle("hidden", tabId !== "upload");
+    elements.searchPanelTitle.textContent = tabId === "search" ? "Search" : "Upload";
+  }
+
+  function applyAppConfig(config: AppConfig) {
+    state.appConfig = config;
+    const allowUpload = Boolean(config.allow_user_upload);
+    const allowYoutube = Boolean(config.allow_user_youtube);
+    const showUpload = allowUpload || allowYoutube;
+    elements.searchSubtabs.classList.toggle("hidden", !showUpload);
+    elements.uploadFileSection.classList.toggle("hidden", !allowUpload);
+    elements.uploadYoutubeSection.classList.toggle("hidden", !allowYoutube);
+    if (allowUpload) {
+      const extList = (config.allowed_upload_exts || []).join(", ");
+      const maxSize = config.max_upload_size
+        ? `${Math.round(config.max_upload_size / (1024 * 1024))} MB`
+        : "unknown";
+      elements.uploadFileHint.textContent = `Max file size: ${maxSize}. Allowed: ${extList}`;
+      elements.uploadFileInput.accept = (config.allowed_upload_exts || []).join(",");
+    }
+    if (!showUpload && state.searchTab === "upload") {
+      setSearchTab("search");
+    }
+    setSearchTab(state.searchTab);
+  }
+
+  function handleSearchSubtabClick(event: Event) {
+    const button = event.currentTarget as HTMLButtonElement | null;
+    const tabId = button?.dataset.searchSubtab as "search" | "upload" | undefined;
+    if (!tabId) {
+      return;
+    }
+    setSearchTab(tabId);
+  }
+
   function updateFavorites(nextFavorites: FavoriteTrack[]) {
     state.favorites = nextFavorites;
     saveFavorites(nextFavorites);
     renderFavoritesList();
     syncFavoriteButton();
+  }
+
+  function getCurrentFavoriteId() {
+    return state.lastYouTubeId ?? state.lastJobId;
+  }
+
+  function getCurrentTrackId() {
+    return state.lastYouTubeId ?? state.lastJobId;
+  }
+
+  function getCurrentFavoriteSourceType(): FavoriteTrack["sourceType"] {
+    return state.lastYouTubeId ? "youtube" : "upload";
   }
 
   function renderFavoritesList() {
@@ -293,12 +376,15 @@ export function bootstrap() {
       const li = document.createElement("li");
       const row = document.createElement("div");
       row.className = "favorite-row";
+      const sourceType = item.sourceType ?? "youtube";
       const link = document.createElement("a");
       link.href = `/listen/${encodeURIComponent(item.uniqueSongId)}`;
-      link.textContent = `${item.title || "Untitled"} — ${
-        item.artist || "Unknown"
-      }`;
-      link.dataset.youtubeId = item.uniqueSongId;
+      const titleText = item.title || "Untitled";
+      const hasArtist = Boolean(item.artist);
+      const artistText = hasArtist ? ` — ${item.artist}` : "";
+      link.textContent = `${titleText}${artistText}`;
+      link.dataset.favoriteId = item.uniqueSongId;
+      link.dataset.sourceType = sourceType;
       link.addEventListener("click", handleFavoriteClick);
       const removeButton = document.createElement("button");
       removeButton.type = "button";
@@ -314,12 +400,36 @@ export function bootstrap() {
   }
 
   function syncFavoriteButton() {
-    const currentId = state.lastYouTubeId;
+    const currentId = getCurrentFavoriteId();
     const active = currentId ? isFavorite(state.favorites, currentId) : false;
     elements.favoriteButton.classList.toggle("active", active);
     const label = active ? "Remove from Favorites" : "Add to Favorites";
     elements.favoriteButton.setAttribute("aria-label", label);
     elements.favoriteButton.title = label;
+  }
+
+  function maybeAutoFavoriteUserSupplied(response: AnalysisComplete) {
+    if (!response.is_user_supplied) {
+      return;
+    }
+    const favoriteId = response.youtube_id ?? response.id;
+    if (!favoriteId || isFavorite(state.favorites, favoriteId)) {
+      return;
+    }
+    const title = state.trackTitle || "Untitled";
+    const artist = state.trackArtist || "";
+    const track: FavoriteTrack = {
+      uniqueSongId: favoriteId,
+      title,
+      artist,
+      duration: state.trackDurationSec,
+      artworkUrl: null,
+      sourceType: response.youtube_id ? "youtube" : "upload",
+    };
+    const result = addFavorite(state.favorites, track);
+    if (result.status === "added") {
+      updateFavorites(result.favorites);
+    }
   }
 
   function handleTopSongsTabClick(event: Event) {
@@ -334,12 +444,17 @@ export function bootstrap() {
   function handleFavoriteClick(event: Event) {
     event.preventDefault();
     const target = event.currentTarget as HTMLAnchorElement | null;
-    const youtubeId = target?.dataset.youtubeId;
-    if (!youtubeId) {
+    const favoriteId = target?.dataset.favoriteId;
+    if (!favoriteId) {
       return;
     }
-    navigateToTabWithState("play", { youtubeId });
-    loadTrackByYouTubeId(context, playbackDeps, youtubeId);
+    const sourceType = target?.dataset.sourceType ?? "youtube";
+    navigateToTabWithState("play", { youtubeId: favoriteId });
+    if (sourceType === "upload") {
+      loadTrackByJobId(context, playbackDeps, favoriteId);
+      return;
+    }
+    loadTrackByYouTubeId(context, playbackDeps, favoriteId);
   }
 
   function handleFavoriteRemove(event: Event) {
@@ -354,7 +469,7 @@ export function bootstrap() {
   }
 
   function handleFavoriteToggle() {
-    const currentId = state.lastYouTubeId;
+    const currentId = getCurrentFavoriteId();
     if (!currentId) {
       return;
     }
@@ -364,14 +479,14 @@ export function bootstrap() {
       return;
     }
     const title = state.trackTitle || "Untitled";
-    const artist = state.trackArtist || "Unknown";
+    const artist = state.trackArtist || "";
     const track: FavoriteTrack = {
       uniqueSongId: currentId,
       title,
       artist,
       duration: state.trackDurationSec,
       artworkUrl: null,
-      sourceType: "youtube",
+      sourceType: getCurrentFavoriteSourceType(),
     };
     const result = addFavorite(state.favorites, track);
     if (result.status === "limit") {
@@ -392,7 +507,13 @@ export function bootstrap() {
     if (!tabId) {
       return;
     }
-    if (tabId === "play" && !state.lastYouTubeId) {
+    if (tabId === "top") {
+      setTopSongsTab("top");
+    }
+    if (tabId === "search") {
+      setSearchTab("search");
+    }
+    if (tabId === "play" && !state.lastYouTubeId && !state.lastJobId) {
       return;
     }
     navigateToTabWithState(tabId);
@@ -406,6 +527,121 @@ export function bootstrap() {
     if (event.key === "Enter") {
       event.preventDefault();
       void runSearch(context, searchDeps);
+    }
+  }
+
+  function extractYoutubeId(value: string) {
+    const trimmed = value.trim();
+    if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) {
+      return trimmed;
+    }
+    let url: URL;
+    try {
+      url = new URL(trimmed);
+    } catch {
+      return null;
+    }
+    const host = url.hostname.replace(/^www\./, "");
+    if (host === "youtu.be") {
+      return url.pathname.split("/").filter(Boolean)[0] ?? null;
+    }
+    if (host.endsWith("youtube.com")) {
+      const idParam = url.searchParams.get("v");
+      if (idParam) {
+        return idParam;
+      }
+      const parts = url.pathname.split("/").filter(Boolean);
+      if (parts[0] === "embed" || parts[0] === "shorts") {
+        return parts[1] ?? null;
+      }
+    }
+    return null;
+  }
+
+  async function handleUploadFileClick() {
+    const config = state.appConfig;
+    if (!config?.allow_user_upload) {
+      showToast(context, "Uploads are disabled.");
+      return;
+    }
+    const file = elements.uploadFileInput.files?.[0];
+    if (!file) {
+      showToast(context, "Choose a file to upload.");
+      return;
+    }
+    if (config.max_upload_size && file.size > config.max_upload_size) {
+      showToast(
+        context,
+        `File is too large. Max ${Math.round(config.max_upload_size / (1024 * 1024))} MB.`
+      );
+      return;
+    }
+    const originalLabel = elements.uploadFileButton.textContent ?? "Load";
+    elements.uploadFileButton.disabled = true;
+    elements.uploadFileButton.textContent = "Loading";
+    try {
+      const response = await uploadAudio(file);
+      if (!response || !response.id) {
+        throw new Error("Upload failed");
+      }
+      resetForNewTrack(context);
+      state.lastJobId = response.id;
+      state.lastYouTubeId = null;
+      state.audioLoaded = false;
+      state.analysisLoaded = false;
+      updateTrackUrl(response.id, true);
+      elements.uploadFileInput.value = "";
+      setActiveTabWithRefresh("play");
+      setLoadingProgress(context, null, "Queued");
+      await pollAnalysis(context, playbackDeps, response.id);
+    } catch (err) {
+      showToast(context, `Upload failed: ${String(err)}`);
+    } finally {
+      elements.uploadFileButton.disabled = false;
+      elements.uploadFileButton.textContent = originalLabel;
+    }
+  }
+
+  async function handleUploadYoutubeClick() {
+    const config = state.appConfig;
+    if (!config?.allow_user_youtube) {
+      showToast(context, "YouTube uploads are disabled.");
+      return;
+    }
+    const raw = elements.uploadYoutubeInput.value.trim();
+    if (!raw) {
+      showToast(context, "Enter a YouTube URL.");
+      return;
+    }
+    const youtubeId = extractYoutubeId(raw);
+    if (!youtubeId) {
+      showToast(context, "Invalid YouTube URL.");
+      return;
+    }
+    const originalLabel = elements.uploadYoutubeButton.textContent ?? "Load";
+    elements.uploadYoutubeButton.disabled = true;
+    elements.uploadYoutubeButton.textContent = "Loading";
+    try {
+      const response = await startYoutubeAnalysis({
+        youtube_id: youtubeId,
+        is_user_supplied: true,
+      });
+      if (!response || !response.id) {
+        throw new Error("Upload failed");
+      }
+      resetForNewTrack(context);
+      state.lastYouTubeId = youtubeId;
+      state.lastJobId = response.id;
+      elements.uploadYoutubeInput.value = "";
+      updateTrackUrl(youtubeId, true);
+      setActiveTabWithRefresh("play");
+      setLoadingProgress(context, null, "Fetching audio");
+      await pollAnalysis(context, playbackDeps, response.id);
+    } catch (err) {
+      showToast(context, `Upload failed: ${String(err)}`);
+    } finally {
+      elements.uploadYoutubeButton.disabled = false;
+      elements.uploadYoutubeButton.textContent = originalLabel;
     }
   }
 
@@ -441,13 +677,14 @@ export function bootstrap() {
     }
     deleteJob(jobId)
       .then(() => {
-        if (youtubeId) {
-          deleteCachedTrack(youtubeId).catch((err) => {
+        const favoriteId = youtubeId ?? jobId;
+        if (favoriteId) {
+          deleteCachedTrack(favoriteId).catch((err) => {
             console.warn(`Cache delete failed: ${String(err)}`);
           });
         }
-        if (youtubeId && isFavorite(state.favorites, youtubeId)) {
-          updateFavorites(removeFavorite(state.favorites, youtubeId));
+        if (favoriteId && isFavorite(state.favorites, favoriteId)) {
+          updateFavorites(removeFavorite(state.favorites, favoriteId));
         }
         resetForNewTrack(context);
         navigateToTabWithState("top", { replace: true });
@@ -645,7 +882,7 @@ export function bootstrap() {
     options?: { replace?: boolean; youtubeId?: string | null }
   ) {
     setActiveTabWithRefresh(tabId);
-    navigateToTab(tabId, options, state.lastYouTubeId);
+    navigateToTab(tabId, options, getCurrentTrackId());
   }
 
   function setActiveTabWithRefresh(tabId: TabId) {

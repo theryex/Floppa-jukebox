@@ -250,6 +250,17 @@ def update_job_input_path(db_path: Path, job_id: str, input_path: str) -> None:
         conn.commit()
 
 
+def update_job_track_metadata(
+    db_path: Path, job_id: str, track_title: Optional[str], track_artist: Optional[str]
+) -> None:
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "UPDATE jobs SET track_title = ?, track_artist = ?, updated_at = ? WHERE id = ?",
+            (track_title, track_artist, _utc_now(), job_id),
+        )
+        conn.commit()
+
+
 def get_top_tracks(db_path: Path, limit: int = 10) -> list[dict]:
     with sqlite3.connect(db_path) as conn:
         rows = conn.execute(

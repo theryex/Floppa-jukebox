@@ -28,6 +28,7 @@ export YOUTUBE_API_KEY=...
 export ADMIN_KEY=...
 export ALLOW_USER_UPLOAD=false
 export ALLOW_USER_YOUTUBE=false
+export WORKER_COUNT=1
 ```
 
 ## Run the API
@@ -83,7 +84,7 @@ curl -X POST "/api/upload" -F "file=@/path/to/audio.m4a"
 Get app configuration flags:
 
 ```bash
-curl "/app-config"
+curl "/api/app-config"
 ```
 
 Response fields include `allow_user_upload`, `allow_user_youtube`, `max_upload_size` (bytes, only when uploads enabled), and `allowed_upload_exts` (only when uploads enabled).

@@ -98,3 +98,18 @@ export async function saveAppConfig(value: unknown) {
       reject(request.error ?? new Error("IndexedDB write failed"));
   });
 }
+
+export async function loadAppConfig(): Promise<unknown | null> {
+  const db = await openTrackCacheDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(appConfigStore, "readonly");
+    const store = tx.objectStore(appConfigStore);
+    const request = store.get("app-config");
+    request.onsuccess = () => {
+      const value = request.result?.value ?? null;
+      resolve(value);
+    };
+    request.onerror = () =>
+      reject(request.error ?? new Error("IndexedDB read failed"));
+  });
+}

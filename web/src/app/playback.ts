@@ -15,7 +15,7 @@ import {
   type AnalysisInProgress,
   type AnalysisResponse,
 } from "./api";
-import { deleteCachedTrack, readCachedTrack, updateCachedTrack } from "./cache";
+import { readCachedTrack, updateCachedTrack } from "./cache";
 
 export type PlaybackDeps = {
   setActiveTab: (tabId: "top" | "search" | "play" | "faq") => void;
@@ -30,6 +30,7 @@ export type PlaybackDeps = {
     message?: string | null
   ) => void;
   onTrackChange?: (youtubeId: string | null) => void;
+  onAnalysisLoaded?: (response: AnalysisComplete) => void;
 };
 
 export function updateListenTimeDisplay(context: AppContext) {
@@ -361,12 +362,11 @@ export async function loadAudioFromJob(context: AppContext, jobId: string) {
     state.audioLoadInFlight = false;
     updateVizVisibility(context);
     updateTrackInfo(context);
-    if (state.lastYouTubeId) {
-      updateCachedTrack(state.lastYouTubeId, { audio: buffer, jobId }).catch(
-        (err) => {
-          console.warn(`Cache save failed: ${String(err)}`);
-        }
-      );
+    const cacheId = state.lastYouTubeId ?? state.lastJobId;
+    if (cacheId) {
+      updateCachedTrack(cacheId, { audio: buffer, jobId }).catch((err) => {
+        console.warn(`Cache save failed: ${String(err)}`);
+      });
     }
     return true;
   } catch (err) {
@@ -407,7 +407,8 @@ function isAnalysisInProgress(
 
 export function applyAnalysisResult(
   context: AppContext,
-  response: AnalysisComplete
+  response: AnalysisComplete,
+  onAnalysisLoaded?: (response: AnalysisComplete) => void
 ): boolean {
   if (!response || response.status !== "complete" || !response.result) {
     return false;
@@ -449,6 +450,7 @@ export function applyAnalysisResult(
     elements.vizNowPlayingEl.textContent = "The Forever Jukebox";
   }
   updateTrackInfo(context);
+  onAnalysisLoaded?.(response);
   const jobId = response.id || state.lastJobId;
   if (jobId) {
     recordPlayOnce(context, jobId).catch((err) => {
@@ -525,7 +527,7 @@ export async function pollAnalysis(
           }
         }
         deps.setLoadingProgress(100, "Calculating pathways");
-        if (applyAnalysisResult(context, response)) {
+        if (applyAnalysisResult(context, response, deps.onAnalysisLoaded)) {
           deps.setActiveTab("play");
           return;
         }
@@ -574,7 +576,53 @@ export async function loadTrackByYouTubeId(
           return;
         }
       }
-      applyAnalysisResult(context, response);
+      applyAnalysisResult(context, response, deps.onAnalysisLoaded);
+      deps.setActiveTab("play");
+      return;
+    }
+    if (response.id) {
+      await pollAnalysis(context, deps, response.id);
+      return;
+    }
+    deps.setAnalysisStatus("Track unavailable. Try again.", false);
+  } catch (err) {
+    deps.setAnalysisStatus(`Load failed: ${String(err)}`, false);
+  }
+}
+
+export async function loadTrackByJobId(
+  context: AppContext,
+  deps: PlaybackDeps,
+  jobId: string
+) {
+  resetForNewTrack(context);
+  deps.setActiveTab("play");
+  deps.setLoadingProgress(null, "Fetching audio");
+  context.state.lastJobId = jobId;
+  context.state.lastYouTubeId = null;
+  deps.onTrackChange?.(null);
+  await tryLoadCachedAudio(context, jobId);
+  try {
+    const response = await fetchAnalysis(jobId);
+    if (!response || !response.id) {
+      deps.setAnalysisStatus("Track unavailable. Try again.", false);
+      deps.navigateToTab("top", { replace: true });
+      return;
+    }
+    maybeUpdateDeleteEligibility(context, response, response.id);
+    if (isAnalysisInProgress(response)) {
+      await pollAnalysis(context, deps, response.id);
+      return;
+    }
+    if (isAnalysisComplete(response)) {
+      if (!context.state.audioLoaded) {
+        const audioLoaded = await loadAudioFromJob(context, response.id);
+        if (!audioLoaded) {
+          await pollAnalysis(context, deps, response.id);
+          return;
+        }
+      }
+      applyAnalysisResult(context, response, deps.onAnalysisLoaded);
       deps.setActiveTab("play");
       return;
     }

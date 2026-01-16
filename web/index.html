@@ -66,8 +66,17 @@
         </ol>
       </section>
       <section class="panel tab-panel hidden" data-tab-panel="search">
-        <div class="panel-title">Search</div>
-        <div class="search-panel">
+        <div class="subtabs hidden" id="search-subtabs">
+          <button class="subtab-btn active" data-search-subtab="search">
+            Search
+          </button>
+          <span class="subtab-spacer" aria-hidden="true"></span>
+          <button class="subtab-btn" data-search-subtab="upload">
+            Upload
+          </button>
+        </div>
+        <div class="panel-title" id="search-panel-title">Search</div>
+        <div class="search-panel" id="search-panel">
           <div class="search-hint" id="search-hint">
             Step 1: Find a Spotify track.
           </div>
@@ -83,6 +92,33 @@
           </div>
           <div class="search-results" id="search-results">
             Search results will appear here.
+          </div>
+        </div>
+        <div class="upload-panel hidden" id="upload-panel">
+          <div class="upload-section hidden" id="upload-file-section">
+            <div class="upload-title">Upload by File</div>
+            <div class="upload-hint" id="upload-file-hint"></div>
+            <div class="search-bar">
+              <input
+                id="upload-file-input"
+                class="search-input"
+                type="file"
+              />
+              <button id="upload-file-button">Load</button>
+            </div>
+          </div>
+          <div class="upload-section hidden" id="upload-youtube-section">
+            <div class="upload-title">Upload by YouTube URL</div>
+            <div class="search-bar">
+              <input
+                id="upload-youtube-input"
+                class="search-input"
+                type="url"
+                placeholder="https://www.youtube.com/watch?v=..."
+                autocomplete="off"
+              />
+              <button id="upload-youtube-button">Load</button>
+            </div>
           </div>
         </div>
       </section>

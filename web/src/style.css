@@ -631,6 +631,10 @@ button:hover {
   gap: 12px;
 }
 
+.search-panel.hidden {
+  display: none;
+}
+
 .search-hint {
   font-size: 13px;
   color: var(--muted);
@@ -690,6 +694,35 @@ button:hover {
   padding: 12px;
   color: var(--muted);
   font-size: 13px;
+}
+
+.upload-panel {
+  display: grid;
+  gap: 32px;
+}
+
+.upload-panel.hidden {
+  display: none;
+}
+
+.upload-section {
+  display: grid;
+  gap: 8px;
+}
+
+.upload-section.hidden {
+  display: none;
+}
+
+.upload-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.upload-hint {
+  font-size: 12px;
+  color: var(--muted);
 }
 
 .search-list {

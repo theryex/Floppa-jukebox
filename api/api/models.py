@@ -9,6 +9,7 @@ class JobBase(BaseModel):
     id: str
     youtube_id: str | None = None
     created_at: str | None = None
+    is_user_supplied: bool | None = None
 
 
 class JobProgress(JobBase):

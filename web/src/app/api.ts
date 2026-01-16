@@ -16,6 +16,7 @@ export type AnalysisStatus =
 type AnalysisBase = {
   youtube_id?: string;
   created_at?: string;
+  is_user_supplied?: boolean;
 };
 
 export type AnalysisInProgress = AnalysisBase & {
@@ -95,11 +96,25 @@ function parseAnalysisResponse(data: unknown): AnalysisResponse | null {
     typeof data.created_at === "string" ? data.created_at : undefined;
   const progress = typeof data.progress === "number" ? data.progress : undefined;
   const message = typeof data.message === "string" ? data.message : undefined;
+  let isUserSupplied: boolean | undefined;
+  if (typeof data.is_user_supplied === "boolean") {
+    isUserSupplied = data.is_user_supplied;
+  } else if (typeof data.is_user_supplied === "number") {
+    isUserSupplied = data.is_user_supplied !== 0;
+  }
   if (status === "downloading" || status === "queued" || status === "processing") {
     if (!id) {
       return null;
     }
-    return { status, id, progress, message, youtube_id: youtubeId, created_at: createdAt };
+    return {
+      status,
+      id,
+      progress,
+      message,
+      youtube_id: youtubeId,
+      created_at: createdAt,
+      is_user_supplied: isUserSupplied,
+    };
   }
   if (status === "failed") {
     return {
@@ -107,6 +122,7 @@ function parseAnalysisResponse(data: unknown): AnalysisResponse | null {
       id,
       youtube_id: youtubeId,
       created_at: createdAt,
+      is_user_supplied: isUserSupplied,
       error: typeof data.error === "string" ? data.error : undefined,
     };
   }
@@ -120,6 +136,7 @@ function parseAnalysisResponse(data: unknown): AnalysisResponse | null {
       result: data.result as AnalysisResult,
       youtube_id: youtubeId,
       created_at: createdAt,
+      is_user_supplied: isUserSupplied,
       track: isRecord(data.track) ? (data.track as TrackMeta) : undefined,
     };
   }
@@ -130,6 +147,7 @@ function parseAnalysisResponse(data: unknown): AnalysisResponse | null {
       result: data.result as AnalysisResult,
       youtube_id: youtubeId,
       created_at: createdAt,
+      is_user_supplied: isUserSupplied,
       track: isRecord(data.track) ? (data.track as TrackMeta) : undefined,
     };
   }
@@ -180,14 +198,28 @@ export async function repairJob(jobId: string, signal?: AbortSignal) {
 
 export async function startYoutubeAnalysis(payload: {
   youtube_id: string;
-  title: string;
-  artist: string;
+  title?: string;
+  artist?: string;
+  is_user_supplied?: boolean;
 }) {
   const data = await fetchJson("/api/analysis/youtube", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
+  return parseAnalysisResponse(data);
+}
+
+export async function uploadAudio(file: File) {
+  const body = new FormData();
+  body.append("file", file);
+  const response = await fetch("/api/upload", { method: "POST", body });
+  if (!response.ok) {
+    const error = new Error(`Upload failed (${response.status})`);
+    (error as Error & { status?: number }).status = response.status;
+    throw error;
+  }
+  const data = await response.json();
   return parseAnalysisResponse(data);
 }
 
@@ -213,7 +245,7 @@ export async function fetchTopSongs(limit: number) {
 }
 
 export async function fetchAppConfig(): Promise<AppConfig> {
-  const data = await fetchJson("/app-config");
+  const data = await fetchJson("/api/app-config");
   return data as AppConfig;
 }
 
