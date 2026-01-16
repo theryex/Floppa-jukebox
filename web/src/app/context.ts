@@ -38,6 +38,7 @@ export type AppState = {
   canonizerEnabled: boolean;
   canonizerBeatIndex: number;
   canonizerTimerId: number | null;
+  rawAnalysis: unknown; // Store full analysis for canonizer
 };
 
 export type AppContext = {

@@ -38,7 +38,7 @@ export function updateTrackInfo(context: AppContext) {
   const graph = engine.getGraphState();
   const resolvedDuration =
     typeof state.trackDurationSec === "number" &&
-    Number.isFinite(state.trackDurationSec)
+      Number.isFinite(state.trackDurationSec)
       ? state.trackDurationSec
       : player.getDuration();
   elements.infoDurationEl.textContent =
@@ -49,8 +49,8 @@ export function updateTrackInfo(context: AppContext) {
   const branchCount = state.vizData
     ? state.vizData.edges.length
     : graph
-    ? graph.allEdges.filter((edge) => !edge.deleted).length
-    : 0;
+      ? graph.allEdges.filter((edge) => !edge.deleted).length
+      : 0;
   elements.infoBranchesEl.textContent = `${branchCount}`;
 }
 
@@ -342,6 +342,7 @@ export function applyAnalysisResult(
   }
   const { elements, engine, state, visualizations } = context;
   engine.loadAnalysis(response.result);
+  state.rawAnalysis = response.result; // Store for canonizer
   const graph = engine.getGraphState();
   state.autoComputedThreshold = graph ? Math.round(graph.currentThreshold) : null;
   state.vizData = engine.getVisualizationData();
