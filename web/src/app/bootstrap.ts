@@ -1018,6 +1018,7 @@ export function bootstrap() {
       : "Retro Mode";
     // Refresh visualizations to update theme colors
     visualizations.forEach((viz) => viz.refresh());
+    canonizerViz.refresh();
   }
 
   function handleCanonizerToggle() {

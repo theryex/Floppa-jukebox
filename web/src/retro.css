@@ -260,3 +260,33 @@ body.retro-mode #play-button {
 body.retro-mode #play-button:hover {
   background: linear-gradient(to bottom, #45ada8 5%, #9de0ad 100%);
 }
+
+/* ========================================
+   Retro Mode Visualization Colors
+   ======================================== 
+   These match the original Eternal Jukebox palette:
+   - Teal (#45ada8) as primary
+   - Green (#9de0ad / #00ff22) for highlights
+   - Blue (#0000ff) for edges
+   - Red (#ff0000) for selected edges
+*/
+body.retro-mode {
+  /* Core visualization colors */
+  --edge-stroke: rgba(0, 0, 255, 0.6);
+  --edge-stroke-bright: #00ff22;
+  --edge-selected: #ff0000;
+  --beat-fill: #45ada8;
+  --beat-highlight: #9de0ad;
+
+  /* Visualization background */
+  --viz-bg: #111111;
+  --viz-shadow: rgba(69, 173, 168, 0.2);
+  --viz-overlay: rgba(0, 0, 0, 0.7);
+}
+
+/* Autocanonizer toggle in retro mode */
+body.retro-mode .canonizer-toggle.active {
+  background: linear-gradient(to bottom, #9de0ad 5%, #45ada8 100%);
+  color: #000;
+  border-color: #9de0ad;
+}
