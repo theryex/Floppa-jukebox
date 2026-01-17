@@ -98,6 +98,7 @@ export function updateTrackInfo(context: AppContext) {
 
 export function updateVizVisibility(context: AppContext) {
   const { elements, visualizations, state } = context;
+  const hasTrack = Boolean(state.lastYouTubeId || state.lastJobId);
   if (state.audioLoaded && state.analysisLoaded) {
     elements.playStatusPanel.classList.add("hidden");
     elements.playMenu.classList.remove("hidden");
@@ -114,7 +115,7 @@ export function updateVizVisibility(context: AppContext) {
     elements.playMenu.classList.add("hidden");
     elements.vizPanel.classList.add("hidden");
     elements.playButton.classList.add("hidden");
-    elements.playTabButton.disabled = true;
+    elements.playTabButton.disabled = !hasTrack;
     elements.vizButtons.forEach((button) => {
       button.disabled = true;
     });
@@ -314,6 +315,9 @@ export function resetForNewTrack(context: AppContext) {
   state.audioLoaded = false;
   state.analysisLoaded = false;
   state.audioLoadInFlight = false;
+  state.lastJobId = null;
+  state.lastYouTubeId = null;
+  state.lastPlayCountedJobId = null;
   updateVizVisibility(context);
   state.playTimerMs = 0;
   state.lastPlayStamp = null;
@@ -334,9 +338,6 @@ export function resetForNewTrack(context: AppContext) {
   elements.computedThresholdEl.textContent = "-";
   engine.updateConfig({ ...defaultConfig });
   syncTuningUI(context);
-  state.lastJobId = null;
-  state.lastYouTubeId = null;
-  state.lastPlayCountedJobId = null;
   elements.playTitle.textContent = "";
   state.trackDurationSec = null;
   state.trackTitle = null;
