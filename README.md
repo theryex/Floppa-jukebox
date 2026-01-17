@@ -1,5 +1,7 @@
 # The Forever Jukebox
 
+![The Forever Jukebox logo](./tfj-logo.png)
+
 The Forever Jukebox is a self-hosted, end-to-end system that analyzes audio,
 serves the results via a lightweight API, and powers a refreshed Infinite
 Jukebox-style web UI with branching playback and multiple visualizations. It
