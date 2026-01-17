@@ -485,6 +485,26 @@ button:hover {
   justify-content: center;
 }
 
+.delete-toggle {
+  background: transparent;
+  border: none;
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.delete-toggle.hidden {
+  display: none;
+}
+
+.delete-toggle .delete-icon {
+  font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 0, "opsz" 30;
+  color: #e35a5a;
+  font-size: 30px;
+  line-height: 1;
+}
+
 .copy-toggle .copy-icon {
   font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 0, "opsz" 30;
   color: var(--text);
@@ -611,6 +631,10 @@ button:hover {
   gap: 12px;
 }
 
+.search-panel.hidden {
+  display: none;
+}
+
 .search-hint {
   font-size: 13px;
   color: var(--muted);
@@ -670,6 +694,35 @@ button:hover {
   padding: 12px;
   color: var(--muted);
   font-size: 13px;
+}
+
+.upload-panel {
+  display: grid;
+  gap: 32px;
+}
+
+.upload-panel.hidden {
+  display: none;
+}
+
+.upload-section {
+  display: grid;
+  gap: 8px;
+}
+
+.upload-section.hidden {
+  display: none;
+}
+
+.upload-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.upload-hint {
+  font-size: 12px;
+  color: var(--muted);
 }
 
 .search-list {

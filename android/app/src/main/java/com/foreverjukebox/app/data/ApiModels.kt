@@ -46,8 +46,17 @@ data class AnalysisResponse(
     val progress: Double? = null,
     val message: String? = null,
     @SerialName("youtube_id") val youtubeId: String? = null,
+    @SerialName("created_at") val createdAt: String? = null,
     val result: JsonElement? = null,
     val error: String? = null
+)
+
+@Serializable
+data class AppConfigResponse(
+    @SerialName("allow_user_upload") val allowUserUpload: Boolean = false,
+    @SerialName("allow_user_youtube") val allowUserYoutube: Boolean = false,
+    @SerialName("max_upload_size") val maxUploadSize: Int? = null,
+    @SerialName("allowed_upload_exts") val allowedUploadExts: List<String>? = null
 )
 
 @Serializable

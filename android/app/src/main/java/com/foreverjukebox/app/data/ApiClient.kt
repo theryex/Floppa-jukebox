@@ -72,6 +72,11 @@ class ApiClient(private val json: Json = Json { ignoreUnknownKeys = true }) {
         return getJson<TopSongsResponse>(url).items
     }
 
+    suspend fun getAppConfig(baseUrl: String): AppConfigResponse {
+        val url = buildUrl(baseUrl, ApiPaths.APP_CONFIG)
+        return getJson(url)
+    }
+
     suspend fun postPlay(baseUrl: String, jobId: String) {
         val url = buildUrl(baseUrl, ApiPaths.play(jobId))
         postEmpty(url)
@@ -85,6 +90,11 @@ class ApiClient(private val json: Json = Json { ignoreUnknownKeys = true }) {
     suspend fun repairJob(baseUrl: String, jobId: String): AnalysisResponse {
         val url = buildUrl(baseUrl, ApiPaths.repair(jobId))
         return postEmptyJson(url).let { json.decodeFromString(it) }
+    }
+
+    suspend fun deleteJob(baseUrl: String, jobId: String) {
+        val url = buildUrl(baseUrl, ApiPaths.job(jobId))
+        deleteEmpty(url)
     }
 
     private suspend fun get(url: String): String = withContext(Dispatchers.IO) {
@@ -139,6 +149,15 @@ class ApiClient(private val json: Json = Json { ignoreUnknownKeys = true }) {
         }
     }
 
+    private suspend fun deleteEmpty(url: String) = withContext(Dispatchers.IO) {
+        val request = Request.Builder().url(url).delete().build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw IOException("HTTP ${response.code}")
+            }
+        }
+    }
+
     private fun buildUrl(
         baseUrl: String,
         pathSegments: List<String>,
@@ -164,9 +183,11 @@ class ApiClient(private val json: Json = Json { ignoreUnknownKeys = true }) {
         val ANALYSIS_YOUTUBE = listOf("api", "analysis", "youtube")
         val JOB_BY_TRACK = listOf("api", "jobs", "by-track")
         val TOP = listOf("api", "top")
+        val APP_CONFIG = listOf("api", "app-config")
 
         fun analysisJob(jobId: String) = listOf("api", "analysis", jobId)
         fun jobByYoutube(youtubeId: String) = listOf("api", "jobs", "by-youtube", youtubeId)
+        fun job(jobId: String) = listOf("api", "jobs", jobId)
         fun play(jobId: String) = listOf("api", "plays", jobId)
         fun audio(jobId: String) = listOf("api", "audio", jobId)
         fun repair(jobId: String) = listOf("api", "repair", jobId)

@@ -79,6 +79,10 @@ export function getElements() {
     document.querySelector<HTMLButtonElement>("#favorite-toggle"),
     "#favorite-toggle"
   );
+  const deleteButton = requireElement(
+    document.querySelector<HTMLButtonElement>("#delete-job"),
+    "#delete-job"
+  );
   const playTitle = requireElement(
     document.querySelector<HTMLDivElement>("#play-title"),
     "#play-title"
@@ -183,6 +187,54 @@ export function getElements() {
     document.querySelector<HTMLButtonElement>("#search-button"),
     "#search-button"
   );
+  const searchSubtabs = requireElement(
+    document.querySelector<HTMLDivElement>("#search-subtabs"),
+    "#search-subtabs"
+  );
+  const searchSubtabButtons = requireNonEmpty(
+    Array.from(document.querySelectorAll<HTMLButtonElement>("[data-search-subtab]")),
+    "[data-search-subtab]"
+  );
+  const searchPanelTitle = requireElement(
+    document.querySelector<HTMLDivElement>("#search-panel-title"),
+    "#search-panel-title"
+  );
+  const searchPanel = requireElement(
+    document.querySelector<HTMLDivElement>("#search-panel"),
+    "#search-panel"
+  );
+  const uploadPanel = requireElement(
+    document.querySelector<HTMLDivElement>("#upload-panel"),
+    "#upload-panel"
+  );
+  const uploadFileSection = requireElement(
+    document.querySelector<HTMLDivElement>("#upload-file-section"),
+    "#upload-file-section"
+  );
+  const uploadFileHint = requireElement(
+    document.querySelector<HTMLDivElement>("#upload-file-hint"),
+    "#upload-file-hint"
+  );
+  const uploadFileInput = requireElement(
+    document.querySelector<HTMLInputElement>("#upload-file-input"),
+    "#upload-file-input"
+  );
+  const uploadFileButton = requireElement(
+    document.querySelector<HTMLButtonElement>("#upload-file-button"),
+    "#upload-file-button"
+  );
+  const uploadYoutubeSection = requireElement(
+    document.querySelector<HTMLDivElement>("#upload-youtube-section"),
+    "#upload-youtube-section"
+  );
+  const uploadYoutubeInput = requireElement(
+    document.querySelector<HTMLInputElement>("#upload-youtube-input"),
+    "#upload-youtube-input"
+  );
+  const uploadYoutubeButton = requireElement(
+    document.querySelector<HTMLButtonElement>("#upload-youtube-button"),
+    "#upload-youtube-button"
+  );
   const searchResults = requireElement(
     document.querySelector<HTMLDivElement>("#search-results"),
     "#search-results"
@@ -233,6 +285,7 @@ export function getElements() {
     tuningButton,
     infoButton,
     favoriteButton,
+    deleteButton,
     playTitle,
     themeLinks,
     fullscreenButton,
@@ -259,6 +312,18 @@ export function getElements() {
     removeSeqInput,
     searchInput,
     searchButton,
+    searchSubtabs,
+    searchSubtabButtons,
+    searchPanelTitle,
+    searchPanel,
+    uploadPanel,
+    uploadFileSection,
+    uploadFileHint,
+    uploadFileInput,
+    uploadFileButton,
+    uploadYoutubeSection,
+    uploadYoutubeInput,
+    uploadYoutubeButton,
     searchResults,
     searchHint,
     topSongsList,
