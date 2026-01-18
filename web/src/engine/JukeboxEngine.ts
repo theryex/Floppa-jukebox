@@ -131,7 +131,6 @@ export class JukeboxEngine {
     return {
       beats: this.beats,
       edges: Array.from(edgeMap.values()),
-      lastBranchPoint: this.graph.lastBranchPoint,
     };
   }
 
