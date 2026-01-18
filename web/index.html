@@ -4,6 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>The Forever Jukebox</title>
+    <style>
+      html.app-loading body {
+        opacity: 0;
+      }
+      html.app-loading #app {
+        visibility: hidden;
+      }
+    </style>
+    <script>
+      document.documentElement.classList.add("app-loading");
+    </script>
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
