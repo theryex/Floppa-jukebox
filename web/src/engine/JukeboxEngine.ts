@@ -307,7 +307,7 @@ export class JukeboxEngine {
       this.player.scheduleJump(targetTime, this.nextTransitionTime);
       this.lastJumped = true;
       this.lastJumpTime = targetTime;
-      this.lastJumpFromIndex = currentIndex;
+      this.lastJumpFromIndex = selection.jumped ? seed.which : currentIndex;
     } else {
       this.lastJumpFromIndex = null;
     }

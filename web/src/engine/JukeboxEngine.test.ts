@@ -293,7 +293,7 @@ describe("JukeboxEngine branching controls", () => {
 
     expect(engineAny.currentBeatIndex).toBe(0);
     expect(player.scheduleJump).toHaveBeenCalledTimes(1);
-    expect(engineAny.lastJumpFromIndex).toBe(1);
+    expect(engineAny.lastJumpFromIndex).toBe(2);
   });
 });
 
