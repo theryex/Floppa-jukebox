@@ -103,7 +103,7 @@ def search_youtube_api(
     return results
 
 
-def search_youtube_fallback(
+def search_youtube_ytdlp(
     query: str,
     max_results: int,
     target_duration: float | None,
