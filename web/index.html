@@ -68,7 +68,57 @@
             Favorites
           </button>
         </div>
-        <div class="panel-title" id="top-list-title">Top 20</div>
+        <div class="panel-title panel-title-row">
+          <span id="top-list-title">Top 20</span>
+          <div class="favorites-sync">
+            <button
+              id="favorites-sync-button"
+              class="favorites-sync-button hidden"
+              type="button"
+              aria-label="Favorites sync"
+              aria-haspopup="menu"
+              aria-expanded="false"
+            >
+              <span
+                class="material-symbols-outlined favorites-sync-icon"
+                aria-hidden="true"
+                >cloud_upload</span
+              >
+            </button>
+            <button
+              id="favorites-sync-refresh"
+              class="favorites-sync-refresh hidden"
+              type="button"
+              aria-label="Refresh favorites"
+            >
+              <span
+                class="material-symbols-outlined favorites-sync-refresh-icon"
+                aria-hidden="true"
+                >sync</span
+              >
+            </button>
+            <div
+              class="favorites-sync-menu hidden"
+              id="favorites-sync-menu"
+              role="menu"
+            >
+              <button
+                type="button"
+                class="favorites-sync-item"
+                data-favorites-sync="enter"
+              >
+                Enter sync code
+              </button>
+              <button
+                type="button"
+                class="favorites-sync-item"
+                data-favorites-sync="create"
+              >
+                Create sync code
+              </button>
+            </div>
+          </div>
+        </div>
         <ol class="top-list" id="top-songs">
           Loading top songs…
         </ol>
@@ -442,6 +492,86 @@
               <span class="info-label">Total branches:</span>
               <span id="info-branches">0</span>
             </div>
+          </div>
+        </div>
+      </div>
+      <div id="favorites-sync-enter-modal" class="modal">
+        <div class="modal-panel">
+          <div class="modal-header">
+            <h2>Sync Favorites</h2>
+            <button
+              id="favorites-sync-enter-close"
+              class="modal-close"
+              aria-label="Close"
+            >
+              <span
+                class="material-symbols-outlined modal-close-icon"
+                aria-hidden="true"
+                >close</span
+              >
+            </button>
+          </div>
+          <div class="modal-body">
+            <p class="modal-hint">
+              Enter a 3-word sync code to replace your local favorites.
+            </p>
+            <input
+              id="favorites-sync-enter-input"
+              class="search-input"
+              type="text"
+              placeholder="bison-laser-sunset"
+              autocomplete="off"
+            />
+            <p
+              id="favorites-sync-enter-status"
+              class="modal-status hidden"
+              role="status"
+              aria-live="polite"
+            ></p>
+          </div>
+          <div class="modal-footer">
+            <button id="favorites-sync-enter-button" type="button">
+              Fetch favorites
+            </button>
+          </div>
+        </div>
+      </div>
+      <div id="favorites-sync-create-modal" class="modal">
+        <div class="modal-panel">
+          <div class="modal-header">
+            <h2>Sync Favorites</h2>
+            <button
+              id="favorites-sync-create-close"
+              class="modal-close"
+              aria-label="Close"
+            >
+              <span
+                class="material-symbols-outlined modal-close-icon"
+                aria-hidden="true"
+                >close</span
+              >
+            </button>
+          </div>
+          <div class="modal-body">
+            <p class="modal-hint">
+              Create a short sync code to pull these favorites on another
+              device.
+            </p>
+            <div
+              id="favorites-sync-create-output"
+              class="favorites-sync-code hidden"
+            ></div>
+            <p
+              id="favorites-sync-create-status"
+              class="modal-status hidden"
+              role="status"
+              aria-live="polite"
+            ></p>
+          </div>
+          <div class="modal-footer">
+            <button id="favorites-sync-create-button" type="button">
+              Create sync code
+            </button>
           </div>
         </div>
       </div>

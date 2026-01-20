@@ -79,6 +79,7 @@ export type AppConfig = {
 export type FavoritesSyncResponse = {
   code?: string;
   count?: number;
+  favorites?: FavoriteTrack[];
 };
 
 export type FavoritesSyncPayload = {
@@ -333,6 +334,19 @@ export async function createFavoritesSync(favorites: FavoriteTrack[]) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
+  return data as FavoritesSyncResponse;
+}
+
+export async function updateFavoritesSync(code: string, favorites: FavoriteTrack[]) {
+  const payload = { favorites: favorites.slice(0, maxFavorites()) };
+  const data = await fetchJson(
+    `/api/favorites/sync/${encodeURIComponent(code)}`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }
+  );
   return data as FavoritesSyncResponse;
 }
 
