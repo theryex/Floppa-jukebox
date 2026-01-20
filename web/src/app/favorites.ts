@@ -3,7 +3,6 @@ export type FavoriteTrack = {
   title: string;
   artist: string;
   duration: number | null;
-  artworkUrl: string | null;
   sourceType: "youtube" | "upload";
 };
 

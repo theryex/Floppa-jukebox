@@ -423,7 +423,6 @@ export function bootstrap() {
       title,
       artist,
       duration: state.trackDurationSec,
-      artworkUrl: null,
       sourceType: response.youtube_id ? "youtube" : "upload",
     };
     const result = addFavorite(state.favorites, track);
@@ -485,7 +484,6 @@ export function bootstrap() {
       title,
       artist,
       duration: state.trackDurationSec,
-      artworkUrl: null,
       sourceType: getCurrentFavoriteSourceType(),
     };
     const result = addFavorite(state.favorites, track);
