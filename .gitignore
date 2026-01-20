@@ -10,6 +10,11 @@ __pycache__/
 .DS_Store
 .env
 
+# dirs
+api/storage/
+spotify/
+EternalJukebox/
+
 # Fly.io
 fly.toml
 
