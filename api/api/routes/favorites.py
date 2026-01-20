@@ -35,7 +35,9 @@ def create_favorites_sync(payload: FavoritesSyncRequest) -> JSONResponse:
     except RuntimeError as exc:
         logger.error("Failed to create favorites sync code: %s", exc)
         raise HTTPException(status_code=500, detail="Failed to create sync code.")
-    response = FavoritesSyncResponse(code=code, count=len(favorites))
+    response = FavoritesSyncResponse(
+        code=code, count=len(favorites), favorites=payload.favorites
+    )
     return JSONResponse(response.model_dump())
 
 
@@ -65,5 +67,7 @@ def update_favorites_sync(code: str, payload: FavoritesSyncRequest) -> JSONRespo
     updated = update_favorites(FAVORITES_DB_PATH, normalized, favorites)
     if not updated:
         raise HTTPException(status_code=404, detail="Sync code not found.")
-    response = FavoritesSyncResponse(code=normalized, count=len(favorites))
+    response = FavoritesSyncResponse(
+        code=normalized, count=len(favorites), favorites=payload.favorites
+    )
     return JSONResponse(response.model_dump())

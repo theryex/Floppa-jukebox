@@ -102,6 +102,7 @@ class FavoritesSyncRequest(BaseModel):
 class FavoritesSyncResponse(BaseModel):
     code: str
     count: int
+    favorites: list[FavoriteTrack] | None = None
 
 
 class FavoritesSyncPayload(BaseModel):
