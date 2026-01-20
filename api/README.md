@@ -130,6 +130,12 @@ Create a favorites sync code:
 curl -X POST "/api/favorites/sync" -H "Content-Type: application/json" -d '{"favorites":[{"uniqueSongId":"youtube:dQw4w9WgXcQ","title":"Never Gonna Give You Up","artist":"Rick Astley","duration":213,"sourceType":"youtube"}]}'
 ```
 
+Update favorites for an existing sync code:
+
+```bash
+curl -X PUT "/api/favorites/sync/bison-laser-sunset" -H "Content-Type: application/json" -d '{"favorites":[{"uniqueSongId":"youtube:dQw4w9WgXcQ","title":"Never Gonna Give You Up","artist":"Rick Astley","duration":213,"sourceType":"youtube"}]}'
+```
+
 Fetch favorites by sync code:
 
 ```bash

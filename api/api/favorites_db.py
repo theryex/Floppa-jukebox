@@ -43,6 +43,17 @@ def save_favorites(db_path: Path, code: str, favorites: list[dict[str, Any]]) ->
         conn.commit()
 
 
+def update_favorites(db_path: Path, code: str, favorites: list[dict[str, Any]]) -> bool:
+    payload = json.dumps(favorites, ensure_ascii=True)
+    with sqlite3.connect(db_path) as conn:
+        cur = conn.execute(
+            "UPDATE favorites_sync SET payload = ? WHERE code = ?",
+            (payload, code),
+        )
+        conn.commit()
+    return cur.rowcount > 0
+
+
 def load_favorites(db_path: Path, code: str) -> Optional[list[dict[str, Any]]]:
     with sqlite3.connect(db_path) as conn:
         row = conn.execute(
