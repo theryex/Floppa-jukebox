@@ -159,6 +159,10 @@ export function getElements() {
     document.querySelector<HTMLButtonElement>("#favorites-sync-create-button"),
     "#favorites-sync-create-button"
   );
+  const favoritesSyncCreateHint = requireElement(
+    document.querySelector<HTMLParagraphElement>("#favorites-sync-create-hint"),
+    "#favorites-sync-create-hint"
+  );
   const favoritesSyncCreateOutput = requireElement(
     document.querySelector<HTMLDivElement>("#favorites-sync-create-output"),
     "#favorites-sync-create-output"
@@ -364,6 +368,7 @@ export function getElements() {
     favoritesSyncCreateModal,
     favoritesSyncCreateClose,
     favoritesSyncCreateButton,
+    favoritesSyncCreateHint,
     favoritesSyncCreateOutput,
     favoritesSyncCreateStatus,
     infoDurationEl,

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -127,9 +127,7 @@
             Search
           </button>
           <span class="subtab-spacer" aria-hidden="true"></span>
-          <button class="subtab-btn" data-search-subtab="upload">
-            Upload
-          </button>
+          <button class="subtab-btn" data-search-subtab="upload">Upload</button>
         </div>
         <div class="panel-title" id="search-panel-title">Search</div>
         <div class="search-panel" id="search-panel">
@@ -155,11 +153,7 @@
             <div class="upload-title">Upload by File</div>
             <div class="upload-hint" id="upload-file-hint"></div>
             <div class="search-bar">
-              <input
-                id="upload-file-input"
-                class="search-input"
-                type="file"
-              />
+              <input id="upload-file-input" class="search-input" type="file" />
               <button id="upload-file-button">Load</button>
             </div>
           </div>
@@ -493,7 +487,7 @@
       <div id="favorites-sync-enter-modal" class="modal">
         <div class="modal-panel">
           <div class="modal-header">
-            <h2>Sync Favorites</h2>
+            <h2>Favorites Sync</h2>
             <button
               id="favorites-sync-enter-close"
               class="modal-close"
@@ -508,13 +502,13 @@
           </div>
           <div class="modal-body">
             <p class="modal-hint">
-              Enter a 3-word sync code to replace your local favorites.
+              Enter the 3-word sync code to pull down your favorites.
             </p>
             <input
               id="favorites-sync-enter-input"
               class="search-input"
               type="text"
-              placeholder="bison-laser-sunset"
+              placeholder="the-forever-jukebox"
               autocomplete="off"
             />
             <p
@@ -526,7 +520,7 @@
           </div>
           <div class="modal-footer">
             <button id="favorites-sync-enter-button" type="button">
-              Fetch favorites
+              Sync favorites
             </button>
           </div>
         </div>
@@ -534,7 +528,7 @@
       <div id="favorites-sync-create-modal" class="modal">
         <div class="modal-panel">
           <div class="modal-header">
-            <h2>Sync Favorites</h2>
+            <h2>Favorites Sync</h2>
             <button
               id="favorites-sync-create-close"
               class="modal-close"
@@ -548,9 +542,8 @@
             </button>
           </div>
           <div class="modal-body">
-            <p class="modal-hint">
-              Create a short sync code to pull these favorites on another
-              device.
+            <p class="modal-hint" id="favorites-sync-create-hint">
+              Create a sync code to share your favorites between devices.
             </p>
             <div
               id="favorites-sync-create-output"

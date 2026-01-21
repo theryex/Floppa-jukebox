@@ -163,7 +163,7 @@ export function bootstrap() {
       visualizations[state.activeVizIndex]?.update(
         engineState.currentBeatIndex,
         engineState.lastJumped,
-        jumpFrom
+        jumpFrom,
       );
       state.lastBeatIndex = engineState.currentBeatIndex;
     }
@@ -203,7 +203,7 @@ export function bootstrap() {
   handleRouteChange(context, playbackDeps, window.location.pathname).catch(
     (err) => {
       console.warn(`Route load failed: ${String(err)}`);
-    }
+    },
   );
 
   window.addEventListener("popstate", handlePopState);
@@ -214,7 +214,7 @@ export function bootstrap() {
       setActiveTab: (tabId: TabId) => setActiveTabWithRefresh(tabId),
       navigateToTab: (
         tabId: TabId,
-        options?: { replace?: boolean; youtubeId?: string | null }
+        options?: { replace?: boolean; youtubeId?: string | null },
       ) => navigateToTabWithState(tabId, options),
       updateTrackUrl: (youtubeId: string, replace?: boolean) =>
         updateTrackUrl(youtubeId, replace),
@@ -232,7 +232,7 @@ export function bootstrap() {
       setActiveTab: (tabId: TabId) => setActiveTabWithRefresh(tabId),
       navigateToTab: (
         tabId: TabId,
-        options?: { replace?: boolean; youtubeId?: string | null }
+        options?: { replace?: boolean; youtubeId?: string | null },
       ) => navigateToTabWithState(tabId, options),
       updateTrackUrl: (youtubeId: string, replace?: boolean) =>
         updateTrackUrl(youtubeId, replace),
@@ -255,7 +255,7 @@ export function bootstrap() {
     handleRouteChange(context, playbackDeps, window.location.pathname).catch(
       (err) => {
         console.warn(`Route load failed: ${String(err)}`);
-      }
+      },
     );
   }
 
@@ -273,33 +273,36 @@ export function bootstrap() {
     });
     elements.favoritesSyncButton.addEventListener(
       "click",
-      handleFavoritesSyncToggle
+      handleFavoritesSyncToggle,
     );
     elements.favoritesSyncItems.forEach((button) => {
       button.addEventListener("click", handleFavoritesSyncItem);
     });
     elements.favoritesSyncEnterClose.addEventListener(
       "click",
-      handleFavoritesSyncEnterClose
+      handleFavoritesSyncEnterClose,
     );
     elements.favoritesSyncCreateClose.addEventListener(
       "click",
-      handleFavoritesSyncCreateClose
+      handleFavoritesSyncCreateClose,
     );
     elements.favoritesSyncEnterButton.addEventListener(
       "click",
-      handleFavoritesSyncEnterSubmit
+      handleFavoritesSyncEnterSubmit,
     );
     elements.favoritesSyncCreateButton.addEventListener(
       "click",
-      handleFavoritesSyncCreateSubmit
+      handleFavoritesSyncCreateSubmit,
     );
     elements.favoritesSyncEnterInput.addEventListener(
       "keydown",
-      handleFavoritesSyncEnterKeydown
+      handleFavoritesSyncEnterKeydown,
     );
     elements.uploadFileButton.addEventListener("click", handleUploadFileClick);
-    elements.uploadYoutubeButton.addEventListener("click", handleUploadYoutubeClick);
+    elements.uploadYoutubeButton.addEventListener(
+      "click",
+      handleUploadYoutubeClick,
+    );
     elements.thresholdInput.addEventListener("input", handleThresholdInput);
     elements.minProbInput.addEventListener("input", handleMinProbInput);
     elements.maxProbInput.addEventListener("input", handleMaxProbInput);
@@ -317,11 +320,11 @@ export function bootstrap() {
     elements.infoModal.addEventListener("click", handleInfoModalClick);
     elements.favoritesSyncEnterModal.addEventListener(
       "click",
-      handleFavoritesSyncEnterModalClick
+      handleFavoritesSyncEnterModalClick,
     );
     elements.favoritesSyncCreateModal.addEventListener(
       "click",
-      handleFavoritesSyncCreateModalClick
+      handleFavoritesSyncCreateModalClick,
     );
     elements.tuningApply.addEventListener("click", handleTuningApply);
     elements.playButton.addEventListener("click", handlePlayClick);
@@ -366,7 +369,8 @@ export function bootstrap() {
     });
     elements.searchPanel.classList.toggle("hidden", tabId !== "search");
     elements.uploadPanel.classList.toggle("hidden", tabId !== "upload");
-    elements.searchPanelTitle.textContent = tabId === "search" ? "Search" : "Upload";
+    elements.searchPanelTitle.textContent =
+      tabId === "search" ? "Search" : "Upload";
   }
 
   function applyAppConfig(config: AppConfig) {
@@ -383,7 +387,9 @@ export function bootstrap() {
         ? `${Math.round(config.max_upload_size / (1024 * 1024))} MB`
         : "unknown";
       elements.uploadFileHint.textContent = `Max file size: ${maxSize}. Allowed: ${extList}`;
-      elements.uploadFileInput.accept = (config.allowed_upload_exts || []).join(",");
+      elements.uploadFileInput.accept = (config.allowed_upload_exts || []).join(
+        ",",
+      );
     }
     if (!showUpload && state.searchTab === "upload") {
       setSearchTab("search");
@@ -397,7 +403,10 @@ export function bootstrap() {
 
   function handleSearchSubtabClick(event: Event) {
     const button = event.currentTarget as HTMLButtonElement | null;
-    const tabId = button?.dataset.searchSubtab as "search" | "upload" | undefined;
+    const tabId = button?.dataset.searchSubtab as
+      | "search"
+      | "upload"
+      | undefined;
     if (!tabId) {
       return;
     }
@@ -477,13 +486,13 @@ export function bootstrap() {
 
   function getFavoritesSyncCreateItem() {
     return elements.favoritesSyncItems.find(
-      (item) => item.dataset.favoritesSync === "create"
+      (item) => item.dataset.favoritesSync === "create",
     );
   }
 
   function getFavoritesSyncRefreshItem() {
     return elements.favoritesSyncItems.find(
-      (item) => item.dataset.favoritesSync === "refresh"
+      (item) => item.dataset.favoritesSync === "refresh",
     );
   }
 
@@ -538,6 +547,10 @@ export function bootstrap() {
     closeFavoritesSyncEnterModal();
     resetFavoritesSyncCreateModal();
     const existingCode = state.favoritesSyncCode;
+    const hintText = existingCode
+      ? "Enter this code on another device to sync."
+      : "Create a sync code to share your favorites between devices.";
+    elements.favoritesSyncCreateHint.textContent = hintText;
     if (existingCode) {
       elements.favoritesSyncCreateOutput.textContent = existingCode;
       elements.favoritesSyncCreateOutput.classList.remove("hidden");
@@ -556,6 +569,8 @@ export function bootstrap() {
     elements.favoritesSyncCreateButton.textContent = "Create sync code";
     elements.favoritesSyncCreateOutput.classList.add("hidden");
     elements.favoritesSyncCreateOutput.textContent = "";
+    elements.favoritesSyncCreateHint.textContent =
+      "Create a sync code to share your favorites between devices.";
     clearFavoritesSyncCreateStatus();
   }
 
@@ -566,13 +581,13 @@ export function bootstrap() {
       return;
     }
     elements.favoritesSyncEnterButton.disabled = true;
-    elements.favoritesSyncEnterButton.textContent = "Fetching...";
-    setFavoritesSyncEnterStatus("Fetching favorites...");
+    elements.favoritesSyncEnterButton.textContent = "Syncing...";
+    setFavoritesSyncEnterStatus("Syncing favorites...");
     try {
       const items = await fetchFavoritesSync(code);
       const favorites = normalizeFavoritesFromSync(items);
       const confirmed = window.confirm(
-        "Replace your local favorites with the synced list?"
+        "Replace your local favorites with the synced list?",
       );
       if (confirmed) {
         const normalizedCode = code.trim().toLowerCase();
@@ -586,16 +601,15 @@ export function bootstrap() {
         clearFavoritesSyncEnterStatus();
       }
     } catch {
-      setFavoritesSyncEnterStatus("Unable to fetch favorites.", true);
+      setFavoritesSyncEnterStatus("Unable to sync favorites.", true);
     } finally {
       elements.favoritesSyncEnterButton.disabled = false;
-      elements.favoritesSyncEnterButton.textContent = "Fetch favorites";
+      elements.favoritesSyncEnterButton.textContent = "Sync favorites";
     }
   }
 
   async function handleFavoritesSyncCreateSubmit() {
-    elements.favoritesSyncCreateButton.disabled = true;
-    elements.favoritesSyncCreateButton.textContent = "Creating...";
+    elements.favoritesSyncCreateButton.classList.add("hidden");
     setFavoritesSyncCreateStatus("Creating sync code...");
     try {
       const response = await createFavoritesSync(state.favorites);
@@ -613,10 +627,12 @@ export function bootstrap() {
       elements.favoritesSyncCreateButton.classList.add("hidden");
       elements.favoritesSyncCreateOutput.textContent = code;
       elements.favoritesSyncCreateOutput.classList.remove("hidden");
-      setFavoritesSyncCreateStatus("Share this code on another device.");
+      elements.favoritesSyncCreateHint.textContent =
+        "Enter this code on another device to sync.";
+      clearFavoritesSyncCreateStatus();
     } catch {
       setFavoritesSyncCreateStatus("Unable to create sync code.", true);
-      elements.favoritesSyncCreateButton.disabled = false;
+      elements.favoritesSyncCreateButton.classList.remove("hidden");
       elements.favoritesSyncCreateButton.textContent = "Create sync code";
     }
   }
@@ -703,7 +719,7 @@ export function bootstrap() {
 
   function updateFavorites(
     nextFavorites: FavoriteTrack[],
-    options?: { sync?: boolean }
+    options?: { sync?: boolean },
   ) {
     const prevFavorites = state.favorites;
     state.favorites = nextFavorites;
@@ -764,7 +780,7 @@ export function bootstrap() {
 
   function computeFavoritesDelta(
     prevFavorites: FavoriteTrack[],
-    nextFavorites: FavoriteTrack[]
+    nextFavorites: FavoriteTrack[],
   ): FavoritesDelta {
     const prevMap = new Map<string, FavoriteTrack>();
     const nextMap = new Map<string, FavoriteTrack>();
@@ -787,10 +803,10 @@ export function bootstrap() {
 
   function applyFavoritesDelta(
     serverFavorites: FavoriteTrack[],
-    delta: FavoritesDelta
+    delta: FavoritesDelta,
   ) {
     let next = serverFavorites.filter(
-      (item) => !delta.removedIds.has(item.uniqueSongId)
+      (item) => !delta.removedIds.has(item.uniqueSongId),
     );
     const existingIds = new Set(next.map((item) => item.uniqueSongId));
     for (const item of delta.added) {
@@ -828,8 +844,9 @@ export function bootstrap() {
       const link = document.createElement("a");
       link.href = `/listen/${encodeURIComponent(item.uniqueSongId)}`;
       const titleText = item.title || "Untitled";
-      const hasArtist = Boolean(item.artist);
-      const artistText = hasArtist ? ` — ${item.artist}` : "";
+      const artist = (item.artist || "").trim();
+      const showArtist = artist !== "" && artist !== "Unknown";
+      const artistText = showArtist ? ` — ${artist}` : "";
       link.textContent = `${titleText}${artistText}`;
       link.dataset.favoriteId = item.uniqueSongId;
       link.dataset.sourceType = sourceType;
@@ -1027,7 +1044,7 @@ export function bootstrap() {
     if (config.max_upload_size && file.size > config.max_upload_size) {
       showToast(
         context,
-        `File is too large. Max ${Math.round(config.max_upload_size / (1024 * 1024))} MB.`
+        `File is too large. Max ${Math.round(config.max_upload_size / (1024 * 1024))} MB.`,
       );
       return;
     }
@@ -1190,7 +1207,7 @@ export function bootstrap() {
     const label = isFullscreen ? "Exit Fullscreen" : "Fullscreen";
     const icon =
       elements.fullscreenButton.querySelector<HTMLSpanElement>(
-        ".fullscreen-icon"
+        ".fullscreen-icon",
       );
     if (icon) {
       icon.textContent = isFullscreen ? "fullscreen_exit" : "fullscreen";
@@ -1334,7 +1351,7 @@ export function bootstrap() {
 
   function navigateToTabWithState(
     tabId: TabId,
-    options?: { replace?: boolean; youtubeId?: string | null }
+    options?: { replace?: boolean; youtubeId?: string | null },
   ) {
     setActiveTabWithRefresh(tabId);
     navigateToTab(tabId, options, getCurrentTrackId());
@@ -1374,7 +1391,7 @@ export function bootstrap() {
       }
     } catch (err) {
       elements.topSongsList.textContent = `Top songs unavailable: ${String(
-        err
+        err,
       )}`;
     }
   }
@@ -1395,13 +1412,13 @@ export function bootstrap() {
       setAnalysisStatus(
         context,
         "Select a track to generate a short URL.",
-        false
+        false,
       );
       navigateToTabWithState("search");
       return;
     }
     const shortUrl = `${window.location.origin}/listen/${encodeURIComponent(
-      state.lastYouTubeId
+      state.lastYouTubeId,
     )}`;
     try {
       await navigator.clipboard.writeText(shortUrl);
@@ -1429,19 +1446,19 @@ export function bootstrap() {
     visualizations[state.activeVizIndex]?.setSelectedEdge(
       state.selectedEdge && !state.selectedEdge.deleted
         ? state.selectedEdge
-        : null
+        : null,
     );
     if (state.lastBeatIndex !== null) {
       visualizations[state.activeVizIndex]?.update(
         state.lastBeatIndex,
         false,
-        null
+        null,
       );
     }
     elements.vizButtons.forEach((button) => {
       button.classList.toggle(
         "active",
-        Number(button.dataset.viz) === state.activeVizIndex
+        Number(button.dataset.viz) === state.activeVizIndex,
       );
     });
     localStorage.setItem(vizStorageKey, String(state.activeVizIndex));
