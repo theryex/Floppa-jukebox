@@ -175,8 +175,8 @@ ensure_web_deps() {
   fi
 }
 
-export GENERATOR_REPO="$ROOT/engine"
-export GENERATOR_CONFIG="$ROOT/engine/calibration.json"
+export ENGINE_REPO="$ROOT/engine"
+export ENGINE_CONFIG="$ROOT/engine/calibration.json"
 
 pids=()
 

@@ -12,12 +12,14 @@ pip install -r requirements.txt
 
 ## Configure the generator
 
-Set environment variables to point at the generator repo and calibration bundle:
+Set environment variables to point at the generator repo and calibration bundle (calibration optional):
 
 ```bash
-export GENERATOR_REPO=../engine
-export GENERATOR_CONFIG=../engine/calibration.json
+export ENGINE_REPO=../engine
+export ENGINE_CONFIG=../engine/calibration.json
 ```
+
+`ENGINE_CONFIG` is optional; omit it to use default analysis settings.
 
 Set API keys:
 
