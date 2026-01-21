@@ -279,14 +279,6 @@ export function bootstrap() {
     elements.favoritesSyncItems.forEach((button) => {
       button.addEventListener("click", handleFavoritesSyncItem);
     });
-    elements.favoritesSyncRefresh.addEventListener(
-      "click",
-      handleFavoritesSyncRefresh
-    );
-    elements.favoritesSyncRefresh.addEventListener(
-      "click",
-      handleFavoritesSyncRefresh
-    );
     elements.favoritesSyncEnterClose.addEventListener(
       "click",
       handleFavoritesSyncEnterClose
@@ -364,10 +356,6 @@ export function bootstrap() {
     elements.favoritesList.classList.toggle("hidden", tabId !== "favorites");
     elements.topListTitle.textContent =
       tabId === "top" ? "Top 20" : "Favorites";
-    elements.favoritesSyncButton.classList.toggle(
-      "hidden",
-      tabId !== "favorites"
-    );
     closeFavoritesSyncMenu();
     updateFavoritesSyncControls();
   }
@@ -424,16 +412,13 @@ export function bootstrap() {
     closeFavoritesSyncMenu();
     const button = event.currentTarget as HTMLButtonElement | null;
     const action = button?.dataset.favoritesSync;
-    if (action === "enter") {
-      openFavoritesSyncEnterModal();
+    if (action === "refresh") {
+      void refreshFavoritesFromSync();
     } else if (action === "create") {
       openFavoritesSyncCreateModal();
+    } else if (action === "enter") {
+      openFavoritesSyncEnterModal();
     }
-  }
-
-  function handleFavoritesSyncRefresh(event: Event) {
-    event.preventDefault();
-    void refreshFavoritesFromSync();
   }
 
   function handleFavoritesSyncDocumentClick(event: Event) {
@@ -475,11 +460,11 @@ export function bootstrap() {
     const hasCode = Boolean(state.favoritesSyncCode);
     const showControls = state.topSongsTab === "favorites";
     elements.favoritesSyncButton.classList.toggle("hidden", !showControls);
-    elements.favoritesSyncRefresh.classList.toggle(
-      "hidden",
-      !showControls || !hasCode
-    );
     elements.favoritesSyncIcon.textContent = hasCode ? "cloud" : "cloud_off";
+    const refreshItem = getFavoritesSyncRefreshItem();
+    if (refreshItem) {
+      refreshItem.classList.toggle("hidden", !hasCode);
+    }
     const createItem = getFavoritesSyncCreateItem();
     if (createItem) {
       createItem.textContent = hasCode ? "View sync code" : "Create sync code";
@@ -489,6 +474,12 @@ export function bootstrap() {
   function getFavoritesSyncCreateItem() {
     return elements.favoritesSyncItems.find(
       (item) => item.dataset.favoritesSync === "create"
+    );
+  }
+
+  function getFavoritesSyncRefreshItem() {
+    return elements.favoritesSyncItems.find(
+      (item) => item.dataset.favoritesSync === "refresh"
     );
   }
 

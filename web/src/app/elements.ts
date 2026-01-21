@@ -311,10 +311,6 @@ export function getElements() {
     ),
     ".favorites-sync-icon"
   );
-  const favoritesSyncRefresh = requireElement(
-    document.querySelector<HTMLButtonElement>("#favorites-sync-refresh"),
-    "#favorites-sync-refresh"
-  );
   const favoritesSyncMenu = requireElement(
     document.querySelector<HTMLDivElement>("#favorites-sync-menu"),
     "#favorites-sync-menu"
@@ -408,7 +404,6 @@ export function getElements() {
     topListTitle,
     favoritesSyncButton,
     favoritesSyncIcon,
-    favoritesSyncRefresh,
     favoritesSyncMenu,
     favoritesSyncItems,
     toast,

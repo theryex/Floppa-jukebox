@@ -85,18 +85,6 @@
                 >cloud_upload</span
               >
             </button>
-            <button
-              id="favorites-sync-refresh"
-              class="favorites-sync-refresh hidden"
-              type="button"
-              aria-label="Refresh favorites"
-            >
-              <span
-                class="material-symbols-outlined favorites-sync-refresh-icon"
-                aria-hidden="true"
-                >sync</span
-              >
-            </button>
             <div
               class="favorites-sync-menu hidden"
               id="favorites-sync-menu"
@@ -104,10 +92,10 @@
             >
               <button
                 type="button"
-                class="favorites-sync-item"
-                data-favorites-sync="enter"
+                class="favorites-sync-item hidden"
+                data-favorites-sync="refresh"
               >
-                Enter sync code
+                Refresh favorites
               </button>
               <button
                 type="button"
@@ -115,6 +103,13 @@
                 data-favorites-sync="create"
               >
                 Create sync code
+              </button>
+              <button
+                type="button"
+                class="favorites-sync-item"
+                data-favorites-sync="enter"
+              >
+                Enter sync code
               </button>
             </div>
           </div>

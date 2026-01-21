@@ -225,22 +225,6 @@ body {
   line-height: 1;
 }
 
-.favorites-sync-refresh {
-  background: transparent;
-  border: none;
-  padding: 0 6px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-
-.favorites-sync-refresh-icon {
-  font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 0, "opsz" 26;
-  color: var(--text);
-  font-size: 22px;
-  line-height: 1;
-}
 
 .favorites-sync-menu {
   position: absolute;
