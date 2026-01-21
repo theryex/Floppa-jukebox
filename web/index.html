@@ -261,16 +261,30 @@
               </div>
             </div>
             <div class="viz-bottom" id="viz-stats">
-              <div class="viz-info">
-                <div class="viz-title" id="viz-now-playing">
-                  The Forever Jukebox
-                </div>
-                <div class="viz-meta">
-                  <span>Listen Time:</span>
-                  <span id="listen-time">00:00:00</span>
-                  <span class="viz-divider">·</span>
-                  <span>Total Beats:</span>
-                  <span id="beats-played">0</span>
+              <div class="viz-bottom-left">
+                <button
+                  id="viz-play"
+                  class="play-toggle viz-play-toggle"
+                  aria-label="Play"
+                >
+                  <span
+                    class="material-symbols-outlined play-icon"
+                    aria-hidden="true"
+                    >play_arrow</span
+                  >
+                  <span class="play-text">Play</span>
+                </button>
+                <div class="viz-info">
+                  <div class="viz-title" id="viz-now-playing">
+                    The Forever Jukebox
+                  </div>
+                  <div class="viz-meta">
+                    <span>Listen Time:</span>
+                    <span id="listen-time">00:00:00</span>
+                    <span class="viz-divider">·</span>
+                    <span>Total Beats:</span>
+                    <span id="beats-played">0</span>
+                  </div>
                 </div>
               </div>
               <button

@@ -329,6 +329,7 @@ export function bootstrap() {
     );
     elements.tuningApply.addEventListener("click", handleTuningApply);
     elements.playButton.addEventListener("click", handlePlayClick);
+    elements.vizPlayButton.addEventListener("click", handlePlayClick);
     elements.shortUrlButton.addEventListener("click", handleShortUrlClick);
     syncInfoButton();
     syncTuneButton();

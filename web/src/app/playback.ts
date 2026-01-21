@@ -288,20 +288,22 @@ export function togglePlayback(context: AppContext) {
 
 function updatePlayButton(context: AppContext, isRunning: boolean) {
   const label = isRunning ? "Stop" : "Play";
-  const icon =
-    context.elements.playButton.querySelector<HTMLSpanElement>(".play-icon");
-  const text =
-    context.elements.playButton.querySelector<HTMLSpanElement>(".play-text");
-  if (icon) {
-    icon.textContent = isRunning ? "stop" : "play_arrow";
-  }
-  if (text) {
-    text.textContent = label;
-  }
+  const updateButton = (button: HTMLButtonElement) => {
+    const icon = button.querySelector<HTMLSpanElement>(".play-icon");
+    const text = button.querySelector<HTMLSpanElement>(".play-text");
+    if (icon) {
+      icon.textContent = isRunning ? "stop" : "play_arrow";
+    }
+    if (text) {
+      text.textContent = label;
+    }
+    button.title = label;
+    button.setAttribute("aria-label", label);
+  };
+  updateButton(context.elements.playButton);
+  updateButton(context.elements.vizPlayButton);
   const shouldPulse = isRunning && context.state.activeTabId !== "play";
   context.elements.playTabButton.classList.toggle("is-playing", shouldPulse);
-  context.elements.playButton.title = label;
-  context.elements.playButton.setAttribute("aria-label", label);
 }
 
 export function resetForNewTrack(context: AppContext) {

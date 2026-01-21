@@ -63,6 +63,10 @@ export function getElements() {
     document.querySelector<HTMLButtonElement>("#play"),
     "#play"
   );
+  const vizPlayButton = requireElement(
+    document.querySelector<HTMLButtonElement>("#viz-play"),
+    "#viz-play"
+  );
   const shortUrlButton = requireElement(
     document.querySelector<HTMLButtonElement>("#short-url"),
     "#short-url"
@@ -347,6 +351,7 @@ export function getElements() {
     analysisSpinner,
     analysisProgress,
     playButton,
+    vizPlayButton,
     shortUrlButton,
     tuningButton,
     infoButton,
