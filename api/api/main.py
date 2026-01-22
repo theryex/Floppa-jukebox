@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
-from fastapi import FastAPI, HTTPException
+import re
+
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
+from starlette.responses import Response
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 
@@ -26,6 +29,18 @@ app.include_router(favorites_router)
 app.include_router(jobs_router)
 app.include_router(media_router)
 app.include_router(search_router)
+
+WP_GARBAGE_RE = re.compile(
+    r"^/(wp-|wp/|wordpress/|blog/|cms/|site/|wp-includes/|wp-admin/|wp-content/|xmlrpc\.php|.*wlwmanifest\.xml)",
+    re.IGNORECASE,
+)
+
+
+@app.middleware("http")
+async def block_garbage_paths(request: Request, call_next):
+    if WP_GARBAGE_RE.match(request.url.path):
+        return Response(status_code=410)
+    return await call_next(request)
 
 
 @app.on_event("startup")
