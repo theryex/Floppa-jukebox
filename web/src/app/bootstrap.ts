@@ -15,6 +15,7 @@ import {
 } from "./ui";
 import { navigateToTab, setActiveTab, updateTrackUrl } from "./tabs";
 import { handleRouteChange } from "./routing";
+import { initBackgroundTimer } from "../shared/backgroundTimer";
 import {
   deleteJob,
   fetchAppConfig,
@@ -75,6 +76,7 @@ type FavoritesDelta = {
 };
 
 export function bootstrap() {
+  initBackgroundTimer();
   const elements = getElements();
   const initialTheme = resolveStoredTheme();
   applyThemeVariables(initialTheme);
@@ -1416,17 +1418,17 @@ export function bootstrap() {
   }
 
   async function copyShortUrl() {
-    if (!state.lastYouTubeId) {
+    const trackId = state.lastYouTubeId ?? state.lastJobId;
+    if (!trackId) {
       setAnalysisStatus(
         context,
         "Select a track to generate a short URL.",
         false,
       );
-      navigateToTabWithState("search");
       return;
     }
     const shortUrl = `${window.location.origin}/listen/${encodeURIComponent(
-      state.lastYouTubeId,
+      trackId,
     )}`;
     try {
       await navigator.clipboard.writeText(shortUrl);
