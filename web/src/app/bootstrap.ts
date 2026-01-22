@@ -1383,19 +1383,19 @@ export function bootstrap() {
       for (const item of items.slice(0, TOP_SONGS_LIMIT)) {
         const title = typeof item.title === "string" ? item.title : "Untitled";
         const artist =
-          typeof item.artist === "string" ? item.artist : "Unknown";
+          typeof item.artist === "string" ? item.artist : "";
         const youtubeId =
           typeof item.youtube_id === "string" ? item.youtube_id : "";
         const li = document.createElement("li");
         if (youtubeId) {
           const link = document.createElement("a");
           link.href = `/listen/${encodeURIComponent(youtubeId)}`;
-          link.textContent = `${title} — ${artist}`;
+          link.textContent = artist ? `${title} — ${artist}` : title;
           link.dataset.youtubeId = youtubeId;
           link.addEventListener("click", handleTopSongClick);
           li.appendChild(link);
         } else {
-          li.textContent = `${title} — ${artist}`;
+          li.textContent = artist ? `${title} — ${artist}` : title;
         }
         elements.topSongsList.appendChild(li);
       }

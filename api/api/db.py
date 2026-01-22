@@ -269,9 +269,10 @@ def get_top_tracks(db_path: Path, limit: int = 10) -> list[dict]:
             FROM jobs
             WHERE track_title IS NOT NULL
               AND track_title != ''
-              AND track_artist IS NOT NULL
-              AND track_artist != ''
-              AND COALESCE(is_user_supplied, 0) = 0
+              AND (
+                (COALESCE(is_user_supplied, 0) = 0 AND track_artist IS NOT NULL AND track_artist != '')
+                OR (COALESCE(is_user_supplied, 0) = 1 AND youtube_id IS NOT NULL AND youtube_id != '')
+              )
               AND play_count > 0
             ORDER BY play_count DESC, updated_at DESC
             LIMIT ?
