@@ -3,7 +3,7 @@ export class BufferedAudioPlayer {
   private buffer: AudioBuffer | null = null;
   private source: AudioBufferSourceNode | null = null;
   private pendingSource: AudioBufferSourceNode | null = null;
-  private pendingSwapTimer: number | null = null;
+  private pendingSwapAt: number | null = null;
   private pendingStartAt = 0;
   private masterGain: GainNode;
   private baseGain = 0.9;
@@ -70,6 +70,7 @@ export class BufferedAudioPlayer {
   }
 
   getCurrentTime(): number {
+    this.maybePromotePending();
     if (!this.buffer) {
       return 0;
     }
@@ -125,19 +126,7 @@ export class BufferedAudioPlayer {
     this.clearPendingSwap();
     this.pendingSource = source;
     this.pendingStartAt = audioStart - targetTime;
-    const delayMs = Math.max(0, (audioStart - this.context.currentTime) * 1000);
-    this.pendingSwapTimer = window.setTimeout(() => {
-      if (this.pendingSource !== source) {
-        return;
-      }
-      if (this.source) {
-        this.source.disconnect();
-      }
-      this.source = source;
-      this.startAt = this.pendingStartAt;
-      this.pendingSource = null;
-      this.pendingSwapTimer = null;
-    }, delayMs);
+    this.pendingSwapAt = audioStart;
   }
 
   private stopSource() {
@@ -165,10 +154,24 @@ export class BufferedAudioPlayer {
   }
 
   private clearPendingSwap() {
-    if (this.pendingSwapTimer !== null) {
-      window.clearTimeout(this.pendingSwapTimer);
-      this.pendingSwapTimer = null;
+    this.pendingSwapAt = null;
+  }
+
+  private maybePromotePending() {
+    if (!this.pendingSource || this.pendingSwapAt === null) {
+      return;
     }
+    if (this.context.currentTime < this.pendingSwapAt) {
+      return;
+    }
+    const source = this.pendingSource;
+    if (this.source) {
+      this.source.disconnect();
+    }
+    this.source = source;
+    this.startAt = this.pendingStartAt;
+    this.pendingSource = null;
+    this.pendingSwapAt = null;
   }
 
   private startSourceAt(offset: number, startTime: number) {

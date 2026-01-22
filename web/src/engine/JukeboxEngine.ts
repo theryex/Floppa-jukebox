@@ -1,6 +1,7 @@
 import { normalizeAnalysis } from "./analysis";
 import { buildJumpGraph } from "./graph";
 import { createRng, RandomMode } from "./random";
+import { backgroundClearTimeout, backgroundSetTimeout } from "../shared/backgroundTimer";
 import { selectNextBeatIndex } from "./selection";
 import {
   JukeboxConfig,
@@ -26,6 +27,8 @@ const DEFAULT_CONFIG: JukeboxConfig = {
 
 const TICK_INTERVAL_MS = 50;
 const RESYNC_TOLERANCE_SECONDS = 0.05;
+const LOOKAHEAD_SECONDS = 0.05;
+const JUMP_LATE_TOLERANCE_SECONDS = 0.04;
 const JUMP_OFFSET_FRACTION = 0.06;
 const MIN_JUMP_OFFSET_SECONDS = 0.015;
 const MAX_JUMP_OFFSET_SECONDS = 0.05;
@@ -160,7 +163,7 @@ export class JukeboxEngine {
   stopJukebox() {
     this.ticking = false;
     if (this.timerId !== null) {
-      window.clearTimeout(this.timerId);
+      backgroundClearTimeout(this.timerId);
       this.timerId = null;
     }
     this.player.stop();
@@ -238,7 +241,7 @@ export class JukeboxEngine {
     if (!this.ticking || !this.analysis) {
       return;
     }
-    this.timerId = window.setTimeout(() => this.tick(), TICK_INTERVAL_MS);
+    this.timerId = backgroundSetTimeout(() => this.tick(), TICK_INTERVAL_MS);
     if (!this.player.isPlaying()) {
       this.emitState(false);
       this.lastTickTime = null;
@@ -265,20 +268,22 @@ export class JukeboxEngine {
       }
     }
 
-    if (
-      this.currentBeatIndex >= 0 &&
-      lastTickTime !== null &&
-      lastTickTime < this.nextTransitionTime &&
-      currentTime >= this.nextTransitionTime
-    ) {
-      this.advanceBeat();
+    if (this.currentBeatIndex >= 0 && lastTickTime !== null) {
+      const crossedTransition =
+        lastTickTime < this.nextTransitionTime && currentTime >= this.nextTransitionTime;
+      const inLookaheadWindow =
+        lastTickTime < this.nextTransitionTime - LOOKAHEAD_SECONDS &&
+        currentTime >= this.nextTransitionTime - LOOKAHEAD_SECONDS;
+      if (crossedTransition || inLookaheadWindow) {
+        this.advanceBeat(currentTime);
+      }
     }
 
     this.emitState(this.lastJumped);
     this.lastJumped = false;
   }
 
-  private advanceBeat() {
+  private advanceBeat(currentTime: number) {
     if (!this.analysis || !this.graph) {
       return;
     }
@@ -288,6 +293,7 @@ export class JukeboxEngine {
     const wrappedIndex = nextIndex >= beatsCount ? 0 : nextIndex;
     const enforceLastBranch = currentIndex === this.graph.lastBranchPoint;
     const seed = enforceLastBranch ? this.beats[currentIndex] : this.beats[wrappedIndex];
+    const allowJump = currentTime <= this.nextTransitionTime + JUMP_LATE_TOLERANCE_SECONDS;
     this.branchState.curRandomBranchChance = this.curRandomBranchChance;
     const selection = selectNextBeatIndex(
       seed,
@@ -295,12 +301,13 @@ export class JukeboxEngine {
       this.config,
       this.rng,
       this.branchState,
-      this.forceBranch || enforceLastBranch
+      allowJump && (this.forceBranch || enforceLastBranch)
     );
     this.curRandomBranchChance = this.branchState.curRandomBranchChance;
-    const chosenIndex = selection.jumped ? selection.index : wrappedIndex;
+    const shouldJump = allowJump && selection.jumped;
+    const chosenIndex = shouldJump ? selection.index : wrappedIndex;
     const wrappedToStart = wrappedIndex === 0 && currentIndex === beatsCount - 1;
-    if (selection.jumped || wrappedToStart) {
+    if (shouldJump || wrappedToStart) {
       const targetBeat = this.beats[chosenIndex];
       const unclampedOffset = targetBeat.duration * JUMP_OFFSET_FRACTION;
       const offset = Math.min(
@@ -312,7 +319,7 @@ export class JukeboxEngine {
       this.player.scheduleJump(targetTime, this.nextTransitionTime);
       this.lastJumped = true;
       this.lastJumpTime = targetTime;
-      this.lastJumpFromIndex = selection.jumped ? seed.which : currentIndex;
+      this.lastJumpFromIndex = shouldJump ? seed.which : currentIndex;
     } else {
       this.lastJumpFromIndex = null;
     }
