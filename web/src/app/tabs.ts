@@ -14,6 +14,17 @@ export function pathForTab(tabId: TabId, youtubeId?: string | null) {
   return "/";
 }
 
+const TUNING_PARAM_KEYS = new Set(["lb", "jb", "lg", "sq", "thresh", "bp"]);
+
+function applyTuningParams(target: URL, sourceParams: URLSearchParams) {
+  TUNING_PARAM_KEYS.forEach((key) => {
+    const value = sourceParams.get(key);
+    if (value !== null) {
+      target.searchParams.set(key, value);
+    }
+  });
+}
+
 export function setActiveTab(
   context: AppContext,
   tabId: TabId,
@@ -58,8 +69,10 @@ export function navigateToTab(
 ) {
   const path = pathForTab(tabId, options?.youtubeId ?? lastYouTubeId);
   const url = new URL(window.location.href);
+  const tuningParams = new URLSearchParams(window.location.search);
   url.pathname = path;
   url.search = "";
+  applyTuningParams(url, tuningParams);
   if (options?.replace) {
     window.history.replaceState({}, "", url.toString());
   } else {
@@ -69,8 +82,10 @@ export function navigateToTab(
 
 export function updateTrackUrl(youtubeId: string, replace = false) {
   const url = new URL(window.location.href);
+  const tuningParams = new URLSearchParams(window.location.search);
   url.pathname = pathForTab("play", youtubeId);
   url.search = "";
+  applyTuningParams(url, tuningParams);
   if (replace) {
     window.history.replaceState({}, "", url.toString());
   } else {

@@ -33,6 +33,8 @@ import {
   applyTuningChanges,
   closeInfo,
   closeTuning,
+  getTuningSearchParams,
+  resetTuningDefaults,
   loadAudioFromJob,
   loadTrackByJobId,
   loadTrackByYouTubeId,
@@ -331,6 +333,7 @@ export function bootstrap() {
       handleFavoritesSyncCreateModalClick,
     );
     elements.tuningApply.addEventListener("click", handleTuningApply);
+    elements.tuningReset.addEventListener("click", handleTuningReset);
     elements.playButton.addEventListener("click", handlePlayClick);
     elements.vizPlayButton.addEventListener("click", handlePlayClick);
     elements.shortUrlButton.addEventListener("click", handleShortUrlClick);
@@ -1279,6 +1282,10 @@ export function bootstrap() {
     applyTuningChanges(context);
   }
 
+  function handleTuningReset() {
+    resetTuningDefaults(context);
+  }
+
   function handlePlayClick() {
     togglePlayback(context);
   }
@@ -1433,9 +1440,14 @@ export function bootstrap() {
       );
       return;
     }
-    const shortUrl = `${window.location.origin}/listen/${encodeURIComponent(
-      trackId,
-    )}`;
+    const url = new URL(
+      `${window.location.origin}/listen/${encodeURIComponent(trackId)}`,
+    );
+    const tuningParams = getTuningSearchParams(context);
+    tuningParams.forEach((value, key) => {
+      url.searchParams.set(key, value);
+    });
+    const shortUrl = url.toString();
     try {
       await navigator.clipboard.writeText(shortUrl);
       showToast(context, "Link copied to clipboard");

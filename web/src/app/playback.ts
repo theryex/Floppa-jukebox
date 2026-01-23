@@ -17,6 +17,11 @@ import {
 } from "./api";
 import { readCachedTrack, updateCachedTrack } from "./cache";
 
+const DEFAULT_VOLUME = 0.5;
+const MIN_RANDOM_BRANCH_DELTA = 0;
+const MAX_RANDOM_BRANCH_DELTA = 0.2;
+const TUNING_PARAM_KEYS = ["lb", "jb", "lg", "sq", "thresh", "bp"];
+
 export type PlaybackDeps = {
   setActiveTab: (tabId: "top" | "search" | "play" | "faq") => void;
   navigateToTab: (
@@ -32,6 +37,131 @@ export type PlaybackDeps = {
   onTrackChange?: (youtubeId: string | null) => void;
   onAnalysisLoaded?: (response: AnalysisComplete) => void;
 };
+
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function mapPercentToRange(percent: number, min: number, max: number) {
+  const safePercent = clamp(percent, 0, 100);
+  return ((max - min) * safePercent) / 100 + min;
+}
+
+function mapValueToPercent(value: number, min: number, max: number) {
+  const safeValue = clamp(value, min, max);
+  return (100 * (safeValue - min)) / (max - min);
+}
+
+export function applyTuningParamsFromUrl(context: AppContext): boolean {
+  const params = new URLSearchParams(window.location.search);
+  const hasTuningParam = TUNING_PARAM_KEYS.some((key) => params.has(key));
+  if (!hasTuningParam) {
+    return false;
+  }
+  const defaults = context.defaultConfig;
+  const nextConfig = { ...defaults };
+  if (params.has("lb")) {
+    nextConfig.addLastEdge = params.get("lb") !== "0";
+  }
+  if (params.get("jb") === "1") {
+    nextConfig.justBackwards = true;
+  }
+  if (params.get("lg") === "1") {
+    nextConfig.justLongBranches = true;
+  }
+  if (params.get("sq") === "0") {
+    nextConfig.removeSequentialBranches = true;
+  }
+  if (params.has("thresh")) {
+    const raw = Number.parseInt(params.get("thresh") ?? "", 10);
+    if (Number.isFinite(raw) && raw >= 0) {
+      nextConfig.currentThreshold = raw;
+    }
+  }
+  if (params.has("bp")) {
+    const fields = (params.get("bp") ?? "").split(",");
+    if (fields.length === 3) {
+      const minPct = Number.parseInt(fields[0] ?? "", 10);
+      const maxPct = Number.parseInt(fields[1] ?? "", 10);
+      const deltaPct = Number.parseInt(fields[2] ?? "", 10);
+      if (Number.isFinite(minPct)) {
+        nextConfig.minRandomBranchChance = mapPercentToRange(minPct, 0, 1);
+      }
+      if (Number.isFinite(maxPct)) {
+        nextConfig.maxRandomBranchChance = mapPercentToRange(maxPct, 0, 1);
+      }
+      if (Number.isFinite(deltaPct)) {
+        nextConfig.randomBranchChanceDelta = mapPercentToRange(
+          deltaPct,
+          MIN_RANDOM_BRANCH_DELTA,
+          MAX_RANDOM_BRANCH_DELTA,
+        );
+      }
+    }
+  }
+  context.engine.updateConfig(nextConfig);
+  return true;
+}
+
+export function getTuningSearchParams(context: AppContext): URLSearchParams {
+  const params = new URLSearchParams();
+  const config = context.engine.getConfig();
+  const defaults = context.defaultConfig;
+  if (!config.addLastEdge) {
+    params.set("lb", "0");
+  }
+  if (config.justBackwards) {
+    params.set("jb", "1");
+  }
+  if (config.justLongBranches) {
+    params.set("lg", "1");
+  }
+  if (config.removeSequentialBranches) {
+    params.set("sq", "0");
+  }
+  if (config.currentThreshold !== 0) {
+    params.set("thresh", `${Math.round(config.currentThreshold)}`);
+  }
+  const minChanged =
+    config.minRandomBranchChance !== defaults.minRandomBranchChance;
+  const maxChanged =
+    config.maxRandomBranchChance !== defaults.maxRandomBranchChance;
+  const deltaChanged =
+    config.randomBranchChanceDelta !== defaults.randomBranchChanceDelta;
+  if (minChanged || maxChanged || deltaChanged) {
+    const minPct = Math.round(
+      mapValueToPercent(config.minRandomBranchChance, 0, 1),
+    );
+    const maxPct = Math.round(
+      mapValueToPercent(config.maxRandomBranchChance, 0, 1),
+    );
+    const deltaPct = Math.round(
+      mapValueToPercent(
+        config.randomBranchChanceDelta,
+        MIN_RANDOM_BRANCH_DELTA,
+        MAX_RANDOM_BRANCH_DELTA,
+      ),
+    );
+    params.set("bp", `${minPct},${maxPct},${deltaPct}`);
+  }
+  return params;
+}
+
+export function updateTuningUrl(context: AppContext, replace = true) {
+  const url = new URL(window.location.href);
+  for (const key of TUNING_PARAM_KEYS) {
+    url.searchParams.delete(key);
+  }
+  const tuningParams = getTuningSearchParams(context);
+  tuningParams.forEach((value, key) => {
+    url.searchParams.set(key, value);
+  });
+  if (replace) {
+    window.history.replaceState({}, "", url.toString());
+  } else {
+    window.history.pushState({}, "", url.toString());
+  }
+}
 
 export function updateListenTimeDisplay(context: AppContext) {
   const { elements, state } = context;
@@ -176,6 +306,11 @@ export function syncTuningUI(context: AppContext) {
 export function applyTuningChanges(context: AppContext) {
   const { elements, engine, state, visualizations } = context;
   const threshold = Number(elements.thresholdInput.value);
+  const computed = Number(elements.computedThresholdEl.textContent);
+  const useAutoThreshold =
+    engine.getConfig().currentThreshold === 0 &&
+    Number.isFinite(computed) &&
+    threshold === computed;
   let minProb = Number(elements.minProbInput.value) / 100;
   let maxProb = Number(elements.maxProbInput.value) / 100;
   const ramp = Number(elements.rampInput.value) / 100;
@@ -187,7 +322,7 @@ export function applyTuningChanges(context: AppContext) {
     elements.maxProbVal.textContent = `${elements.maxProbInput.value}%`;
   }
   engine.updateConfig({
-    currentThreshold: threshold,
+    currentThreshold: useAutoThreshold ? 0 : threshold,
     minRandomBranchChance: minProb,
     maxRandomBranchChance: maxProb,
     randomBranchChanceDelta: ramp,
@@ -204,18 +339,42 @@ export function applyTuningChanges(context: AppContext) {
   }
   const graph = engine.getGraphState();
   updateTrackInfo(context);
-  elements.computedThresholdEl.textContent =
-    state.autoComputedThreshold === null
-      ? "-"
-      : `${state.autoComputedThreshold}`;
-  if (threshold === 0 && graph) {
+  if (graph) {
     const resolved = Math.max(0, Math.round(graph.currentThreshold));
-    state.autoComputedThreshold = resolved;
-    elements.thresholdInput.value = `${resolved}`;
-    elements.thresholdVal.textContent = elements.thresholdInput.value;
-    engine.updateConfig({ currentThreshold: resolved });
+    if (useAutoThreshold) {
+      state.autoComputedThreshold = resolved;
+    }
+    elements.computedThresholdEl.textContent = `${resolved}`;
+    if (useAutoThreshold) {
+      elements.thresholdInput.value = `${resolved}`;
+      elements.thresholdVal.textContent = elements.thresholdInput.value;
+    }
+  } else {
+    elements.computedThresholdEl.textContent =
+      state.autoComputedThreshold === null
+        ? "-"
+        : `${state.autoComputedThreshold}`;
   }
+  updateTuningUrl(context, true);
   closeTuning(context);
+}
+
+export function resetTuningDefaults(context: AppContext) {
+  const { engine, state, visualizations, player } = context;
+  engine.updateConfig(context.defaultConfig);
+  engine.rebuildGraph();
+  state.vizData = engine.getVisualizationData();
+  const data = state.vizData;
+  if (data) {
+    visualizations.forEach((viz) => viz.setData(data));
+  }
+  const graph = engine.getGraphState();
+  state.autoComputedThreshold = graph
+    ? Math.round(graph.currentThreshold)
+    : null;
+  player.setVolume(DEFAULT_VOLUME);
+  syncTuningUI(context);
+  updateTrackInfo(context);
 }
 
 export function startListenTimer(context: AppContext) {
@@ -421,11 +580,12 @@ export function applyAnalysisResult(
   }
   maybeUpdateDeleteEligibility(context, response, response.id);
   const { elements, engine, state, visualizations } = context;
+  applyTuningParamsFromUrl(context);
+  const useAutoThreshold = engine.getConfig().currentThreshold === 0;
   engine.loadAnalysis(response.result);
   const graph = engine.getGraphState();
-  state.autoComputedThreshold = graph
-    ? Math.round(graph.currentThreshold)
-    : null;
+  state.autoComputedThreshold =
+    useAutoThreshold && graph ? Math.round(graph.currentThreshold) : null;
   state.vizData = engine.getVisualizationData();
   const data = state.vizData;
   if (data) {
