@@ -310,6 +310,7 @@ export function bootstrap() {
     elements.minProbInput.addEventListener("input", handleMinProbInput);
     elements.maxProbInput.addEventListener("input", handleMaxProbInput);
     elements.rampInput.addEventListener("input", handleRampInput);
+    elements.volumeInput.addEventListener("input", handleVolumeInput);
     elements.tuningButton.addEventListener("click", handleOpenTuning);
     elements.infoButton.addEventListener("click", handleOpenInfo);
     elements.favoriteButton.addEventListener("click", handleFavoriteToggle);
@@ -1141,6 +1142,11 @@ export function bootstrap() {
 
   function handleRampInput() {
     elements.rampVal.textContent = `${elements.rampInput.value}%`;
+  }
+
+  function handleVolumeInput() {
+    elements.volumeVal.textContent = elements.volumeInput.value;
+    player.setVolume(Number(elements.volumeInput.value) / 100);
   }
 
   function handleOpenTuning() {

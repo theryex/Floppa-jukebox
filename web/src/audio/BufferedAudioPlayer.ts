@@ -6,7 +6,7 @@ export class BufferedAudioPlayer {
   private pendingSwapAt: number | null = null;
   private pendingStartAt = 0;
   private masterGain: GainNode;
-  private baseGain = 0.9;
+  private volume = 0.5;
   private startAt = 0;
   private offset = 0;
   private playing = false;
@@ -15,7 +15,7 @@ export class BufferedAudioPlayer {
   constructor(context?: AudioContext) {
     this.context = context ?? new AudioContext();
     this.masterGain = this.context.createGain();
-    this.masterGain.gain.value = this.baseGain;
+    this.masterGain.gain.value = this.volume;
     this.masterGain.connect(this.context.destination);
   }
 
@@ -91,6 +91,16 @@ export class BufferedAudioPlayer {
 
   getDuration(): number | null {
     return this.buffer ? this.buffer.duration : null;
+  }
+
+  setVolume(value: number) {
+    const clamped = Math.max(0, Math.min(1, value));
+    this.volume = clamped;
+    this.masterGain.gain.value = clamped;
+  }
+
+  getVolume(): number {
+    return this.volume;
   }
 
   scheduleJump(targetTime: number, transitionTime: number) {
