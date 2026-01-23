@@ -141,7 +141,7 @@ export function closeInfo(context: AppContext) {
 }
 
 export function syncTuningUI(context: AppContext) {
-  const { elements, engine, state } = context;
+  const { elements, engine, player, state } = context;
   const config = engine.getConfig();
   const graph = engine.getGraphState();
   const thresholdValue =
@@ -159,6 +159,9 @@ export function syncTuningUI(context: AppContext) {
   elements.maxProbVal.textContent = `${maxProbPct}%`;
   elements.rampInput.value = `${rampPct}`;
   elements.rampVal.textContent = `${rampPct}%`;
+  const volumePct = Math.round(player.getVolume() * 100);
+  elements.volumeInput.value = `${volumePct}`;
+  elements.volumeVal.textContent = `${volumePct}`;
   elements.lastEdgeInput.checked = config.addLastEdge;
   elements.justBackwardsInput.checked = config.justBackwards;
   elements.justLongInput.checked = config.justLongBranches;

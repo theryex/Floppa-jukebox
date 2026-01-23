@@ -213,6 +213,14 @@ export function getElements() {
     document.querySelector<HTMLSpanElement>("#ramp-val"),
     "#ramp-val"
   );
+  const volumeInput = requireElement(
+    document.querySelector<HTMLInputElement>("#volume"),
+    "#volume"
+  );
+  const volumeVal = requireElement(
+    document.querySelector<HTMLSpanElement>("#volume-val"),
+    "#volume-val"
+  );
   const lastEdgeInput = requireElement(
     document.querySelector<HTMLInputElement>("#last-edge"),
     "#last-edge"
@@ -388,6 +396,8 @@ export function getElements() {
     maxProbVal,
     rampInput,
     rampVal,
+    volumeInput,
+    volumeVal,
     lastEdgeInput,
     justBackwardsInput,
     justLongInput,
