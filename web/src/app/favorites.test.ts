@@ -1,0 +1,101 @@
+import { describe, expect, it, beforeEach } from "vitest";
+import {
+  addFavorite,
+  isFavorite,
+  loadFavorites,
+  loadFavoritesSyncCode,
+  maxFavorites,
+  removeFavorite,
+  saveFavorites,
+  saveFavoritesSyncCode,
+} from "./favorites";
+
+function setLocalStorage() {
+  const store = new Map<string, string>();
+  globalThis.localStorage = {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      store.set(key, value);
+    },
+    removeItem: (key: string) => {
+      store.delete(key);
+    },
+    clear: () => {
+      store.clear();
+    },
+  } as Storage;
+  return store;
+}
+
+describe("favorites", () => {
+  beforeEach(() => {
+    setLocalStorage();
+  });
+
+  it("loads and saves favorites with sorting", () => {
+    const items = [
+      {
+        uniqueSongId: "2",
+        title: "B",
+        artist: "C",
+        duration: 1,
+        sourceType: "youtube" as const,
+      },
+      {
+        uniqueSongId: "1",
+        title: "A",
+        artist: "Z",
+        duration: 2,
+        sourceType: "youtube" as const,
+      },
+    ];
+    saveFavorites(items);
+    const loaded = loadFavorites();
+    expect(loaded[0].uniqueSongId).toBe("1");
+    expect(loaded[1].uniqueSongId).toBe("2");
+  });
+
+  it("enforces favorite limit and handles duplicates", () => {
+    const base = Array.from({ length: maxFavorites() }, (_, i) => ({
+      uniqueSongId: `${i}`,
+      title: `Track ${i}`,
+      artist: "Artist",
+      duration: null,
+      sourceType: "youtube" as const,
+    }));
+    const result = addFavorite(base, base[0]);
+    expect(result.status).toBe("duplicate");
+    const extra = {
+      uniqueSongId: "extra",
+      title: "Extra",
+      artist: "Artist",
+      duration: null,
+      sourceType: "youtube" as const,
+    };
+    const limited = addFavorite(base, extra);
+    expect(limited.status).toBe("limit");
+  });
+
+  it("removes favorites", () => {
+    const items = [
+      {
+        uniqueSongId: "1",
+        title: "A",
+        artist: "B",
+        duration: 1,
+        sourceType: "youtube" as const,
+      },
+    ];
+    const next = removeFavorite(items, "1");
+    expect(next.length).toBe(0);
+  });
+
+  it("checks favorite presence", () => {
+    expect(isFavorite([], "1")).toBe(false);
+  });
+
+  it("handles sync code normalization", () => {
+    saveFavoritesSyncCode("  AbC ");
+    expect(loadFavoritesSyncCode()).toBe("abc");
+  });
+});
