@@ -83,6 +83,9 @@ function createContext(overrides?: Partial<AppContext>): AppContext {
     player: player as unknown as AppContext["player"],
     visualizations: [{ setData: vi.fn() }] as unknown as AppContext["visualizations"],
     defaultConfig: engineConfig as AppContext["defaultConfig"],
+    canonizerEngine: { loadAnalysis: vi.fn(), getBeats: vi.fn(() => []) } as unknown as AppContext["canonizerEngine"],
+    canonizerPlayer: { setAudioBuffer: vi.fn(), playBeat: vi.fn() } as unknown as AppContext["canonizerPlayer"],
+    canonizerViz: { setData: vi.fn(), render: vi.fn() } as unknown as AppContext["canonizerViz"],
     state: {
       autoComputedThreshold: null,
       vizData: null,
@@ -118,6 +121,10 @@ function createContext(overrides?: Partial<AppContext>): AppContext {
       appConfig: null,
       tuningParams: null,
       beatsPlayed: 0,
+      canonizerEnabled: false,
+      canonizerBeatIndex: 0,
+      canonizerTimerId: null,
+      rawAnalysis: null,
     } as AppContext["state"],
     ...overrides,
   };

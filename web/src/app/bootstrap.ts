@@ -18,7 +18,6 @@ import {
 } from "./ui";
 import { navigateToTab, setActiveTab, updateTrackUrl } from "./tabs";
 import { handleRouteChange } from "./routing";
-import { initBackgroundTimer } from "../shared/backgroundTimer";
 import {
   deleteJob,
   fetchAppConfig,

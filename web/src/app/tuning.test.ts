@@ -45,6 +45,9 @@ function createContext(
     elements: {} as AppContext["elements"],
     player: {} as AppContext["player"],
     visualizations: [],
+    canonizerEngine: {} as AppContext["canonizerEngine"],
+    canonizerPlayer: {} as AppContext["canonizerPlayer"],
+    canonizerViz: {} as AppContext["canonizerViz"],
     state: { tuningParams: null } as AppContext["state"],
   };
 }

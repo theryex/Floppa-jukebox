@@ -31,6 +31,9 @@ function createContext(): AppContext {
     player: {} as AppContext["player"],
     visualizations: [],
     defaultConfig: {} as AppContext["defaultConfig"],
+    canonizerEngine: {} as AppContext["canonizerEngine"],
+    canonizerPlayer: {} as AppContext["canonizerPlayer"],
+    canonizerViz: {} as AppContext["canonizerViz"],
     state: { toastTimer: null } as AppContext["state"],
   };
 }
@@ -39,12 +42,12 @@ class MockElement {
   constructor(
     public tagName: string,
     public isContentEditable = false,
-  ) {}
-  addEventListener() {}
+  ) { }
+  addEventListener() { }
   dispatchEvent() {
     return true;
   }
-  removeEventListener() {}
+  removeEventListener() { }
 }
 
 describe("ui helpers", () => {

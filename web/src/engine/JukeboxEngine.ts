@@ -1,7 +1,7 @@
 import { normalizeAnalysis } from "./analysis";
 import { buildJumpGraph } from "./graph";
 import { createRng, RandomMode } from "./random";
-import { backgroundClearTimeout, backgroundSetTimeout } from "../shared/backgroundTimer";
+import { backgroundClearTimeout } from "../shared/backgroundTimer";
 import { selectNextBeatIndex } from "./selection";
 import {
   JukeboxConfig,

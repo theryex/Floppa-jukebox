@@ -27,6 +27,9 @@ function createContext(): AppContext {
     player: {} as AppContext["player"],
     visualizations: [],
     defaultConfig: {} as AppContext["defaultConfig"],
+    canonizerEngine: {} as AppContext["canonizerEngine"],
+    canonizerPlayer: {} as AppContext["canonizerPlayer"],
+    canonizerViz: {} as AppContext["canonizerViz"],
     state: {
       lastYouTubeId: null,
       lastJobId: null,
