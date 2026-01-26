@@ -29,17 +29,17 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     FOREVER_JUKEBOX_GPU=${GPU_MODE}
 
-# Install system dependencies including Essentia requirements
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     libsndfile1 \
+    libsndfile1-dev \
     build-essential \
     gcc \
     g++ \
     gfortran \
     curl \
     ca-certificates \
-    libsndfile1-dev \
     unzip \
     # Essentia dependencies
     libyaml-dev \
@@ -55,12 +55,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY api/ ./api/
-COPY engine/ ./engine/
-COPY --from=web-build /app/web/dist ./web/dist
-COPY docker/entrypoint.sh /app/entrypoint.sh
 
-# Install base Python packages
+# Install Python packages including Essentia
+COPY api/requirements.txt /app/api/
+COPY engine/requirements.txt /app/engine/
 RUN python -m venv /opt/venv \
     && /opt/venv/bin/pip install --upgrade pip setuptools wheel \
     && /opt/venv/bin/pip install Cython "numpy==1.26.4" \
@@ -82,16 +80,6 @@ COPY --from=web-build /app/web/dist ./web/dist
 COPY docker/entrypoint.sh /app/entrypoint.sh
 
 RUN chmod +x /app/entrypoint.sh
-
-# Optional: Install GPU packages based on GPU_MODE
-# For CUDA: rebuild with --build-arg GPU_MODE=cuda
-# For ROCm: rebuild with --build-arg GPU_MODE=rocm
-RUN if [ "$GPU_MODE" = "cuda" ]; then \
-    /opt/venv/bin/pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121 && \
-    /opt/venv/bin/pip install cupy-cuda12x; \
-    elif [ "$GPU_MODE" = "rocm" ]; then \
-    /opt/venv/bin/pip install torch torchaudio --index-url https://download.pytorch.org/whl/rocm5.7; \
-    fi
 
 # Optional: Install GPU packages based on GPU_MODE
 # For CUDA: rebuild with --build-arg GPU_MODE=cuda

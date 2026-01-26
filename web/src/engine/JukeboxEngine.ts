@@ -69,19 +69,16 @@ export class JukeboxEngine {
   private lastJumpTime: number | null = null;
   private lastJumpFromIndex: number | null = null;
   private lastTickTime: number | null = null;
-  private lastTickTime: number | null = null;
   private forceBranch = false;
   private deletedEdgeKeys = new Set<string>();
   private rng: () => number;
   private listener: UpdateListener | null = null;
-  private branchState = { curRandomBranchChance: 0 };
   private branchState = { curRandomBranchChance: 0 };
 
   constructor(player: JukeboxPlayer, options: JukeboxEngineOptions = {}) {
     this.player = player;
     this.config = { ...DEFAULT_CONFIG, ...options.config };
     this.rng = createRng(options.randomMode ?? "random", options.seed);
-    this.branchState.curRandomBranchChance = this.config.minRandomBranchChance;
     this.branchState.curRandomBranchChance = this.config.minRandomBranchChance;
   }
 
@@ -235,11 +232,9 @@ export class JukeboxEngine {
     this.beatsPlayed = 0;
     this.curRandomBranchChance = this.config.minRandomBranchChance;
     this.branchState.curRandomBranchChance = this.curRandomBranchChance;
-    this.branchState.curRandomBranchChance = this.curRandomBranchChance;
     this.lastJumped = false;
     this.lastJumpTime = null;
     this.lastJumpFromIndex = null;
-    this.lastTickTime = null;
     this.lastTickTime = null;
   }
 
@@ -250,7 +245,6 @@ export class JukeboxEngine {
     this.timerId = window.setTimeout(() => this.tick(), TICK_INTERVAL_MS);
     if (!this.player.isPlaying()) {
       this.emitState(false);
-      this.lastTickTime = null;
       this.lastTickTime = null;
       return;
     }
@@ -294,7 +288,6 @@ export class JukeboxEngine {
   }
 
   private advanceBeat(currentTime: number) {
-  private advanceBeat(currentTime: number) {
     if (!this.analysis || !this.graph) {
       return;
     }
@@ -314,8 +307,6 @@ export class JukeboxEngine {
       this.graph,
       this.config,
       this.rng,
-      this.branchState,
-      allowJump && (this.forceBranch || enforceLastBranch)
       this.branchState,
       allowJump && (this.forceBranch || enforceLastBranch)
     );
@@ -338,7 +329,6 @@ export class JukeboxEngine {
       this.player.scheduleJump(targetTime, this.nextTransitionTime);
       this.lastJumped = true;
       this.lastJumpTime = targetTime;
-      this.lastJumpFromIndex = shouldJump ? seed.which : currentIndex;
       this.lastJumpFromIndex = shouldJump ? seed.which : currentIndex;
     } else {
       this.lastJumpFromIndex = null;

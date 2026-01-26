@@ -1,5 +1,4 @@
 # The Forever Jukebox Audio Analysis Engine
-# The Forever Jukebox Audio Analysis Engine
 
 Generate audio analysis JSON from audio files using a local Python pipeline with GPU acceleration.
 
@@ -46,7 +45,7 @@ Then recreate venv with `--system-site-packages`:
 python3 -m venv .venv --system-site-packages
 ```
 
-If Essentia fails to build locally, install it system-wide and use `--system-site-packages` for the venv:
+## Usage
 
 ```bash
 # With config file (legacy format)
@@ -96,7 +95,7 @@ Simpler affine calibration format:
 app/
 ├── analysis.py        # Main analysis pipeline (merged upstream + GPU)
 ├── audio.py           # FFmpeg-based audio decoding
-├── beats.py           # madmom beat/downbeat detection
+├── beats.py           # madmom beat/downbeat tracking
 ├── config.py          # Configuration (supports both formats)
 ├── features.py        # Legacy scipy-based features
 ├── features_essentia.py  # Essentia + GPU hybrid features

@@ -1010,7 +1010,6 @@ export function bootstrap() {
     }
     showToast(context, message);
   }
-
   function handleRetroToggle() {
     const isRetro = document.body.classList.toggle("retro-mode");
     elements.retroToggleButton.textContent = isRetro
