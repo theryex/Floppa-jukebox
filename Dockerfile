@@ -96,11 +96,12 @@ ENV FOREVER_JUKEBOX_GPU=${GPU_MODE} \
     GENERATOR_CALIBRATION="/app/engine/calibration.json"
 
 # Install only RUNTIME shared libraries (NO compilers, NO -dev packages)
+# Note: In Bookworm, libfftw3 was split by precision type
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     libsndfile1 \
     libsamplerate0 \
-    libfftw3-3 \
+    libfftw3-double3 \
     libyaml-0-2 \
     libtag1v5 \
     libchromaprint1 \
