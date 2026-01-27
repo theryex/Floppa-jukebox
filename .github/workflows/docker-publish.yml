@@ -70,6 +70,11 @@ jobs:
         if: steps.skip-check.outputs.skip != 'true'
         uses: actions/checkout@v4
 
+      - name: Lowercase Image Name
+        if: steps.skip-check.outputs.skip != 'true'
+        run: |
+          echo "IMAGE_NAME=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
+
       # Free up disk space for large GPU builds
       - name: Free Disk Space (Ubuntu)
         if: steps.skip-check.outputs.skip != 'true' && matrix.flavor != 'cpu'
@@ -129,13 +134,12 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: ${{ matrix.build-args }}
-          # TEMPORARY: Disable cache to force fresh build
-          no-cache: true
-          # Multi-stage cache optimization (re-enable after successful build):
-          # cache-from: |
-          #   type=gha,scope=build-${{ matrix.flavor }}
-          #   type=gha,scope=build-base
-          # cache-to: type=gha,mode=max,scope=build-${{ matrix.flavor }}
+          # Multi-stage cache optimization:
+          # Cache each stage separately for better reuse
+          cache-from: |
+            type=gha,scope=build-${{ matrix.flavor }}
+            type=gha,scope=build-base
+          cache-to: type=gha,mode=max,scope=build-${{ matrix.flavor }}
           # Provenance for supply chain security
           provenance: true
           sbom: true
