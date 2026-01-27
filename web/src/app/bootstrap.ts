@@ -2,10 +2,9 @@ import { JukeboxEngine } from "../engine";
 import { BufferedAudioPlayer } from "../audio/BufferedAudioPlayer";
 import type { Edge } from "../engine/types";
 import { getElements } from "./elements";
-import {
-  attachVisualizationResize,
-  createVisualizations,
-} from "./visualization";
+import { attachVisualizationResize } from "./visualization";
+import { AutocanonizerController } from "../autocanonizer/AutocanonizerController";
+import { JukeboxController } from "../jukebox/JukeboxController";
 import { applyTheme, applyThemeVariables, resolveStoredTheme } from "./theme";
 import {
   setAnalysisStatus,
@@ -91,11 +90,13 @@ export function bootstrap() {
   });
   const player = new BufferedAudioPlayer();
   const engine = new JukeboxEngine(player, { randomMode: "random" });
-  const visualizations = createVisualizations(elements.vizLayer);
+  const autocanonizer = new AutocanonizerController(elements.canonizerLayer);
+  const jukebox = new JukeboxController(elements.vizLayer);
   const defaultConfig = engine.getConfig();
   const state: AppState = {
     activeTabId: "top",
     activeVizIndex: 0,
+    playMode: "jukebox",
     topSongsTab: "top",
     favorites: loadFavorites(),
     favoritesSyncCode: loadFavoritesSyncCode(),
@@ -132,7 +133,8 @@ export function bootstrap() {
     elements,
     engine,
     player,
-    visualizations,
+    autocanonizer,
+    jukebox,
     defaultConfig,
     state,
   };
@@ -142,11 +144,13 @@ export function bootstrap() {
   let syncUpdateInFlight = false;
   let pendingSyncDelta: FavoritesDelta | null = null;
 
-  visualizations.forEach((viz, index) => viz.setVisible(index === 0));
+  jukebox.setActiveIndex(0);
   elements.vizButtons.forEach((button) => {
     button.disabled = true;
   });
-  attachVisualizationResize(visualizations, elements.vizPanel);
+  attachVisualizationResize([jukebox], elements.vizPanel);
+  attachVisualizationResize([autocanonizer], elements.vizPanel);
+  setPlayMode("jukebox");
 
   const storedViz = localStorage.getItem(vizStorageKey);
   if (storedViz) {
@@ -162,6 +166,16 @@ export function bootstrap() {
     }
   });
 
+  autocanonizer.setOnBeat((index) => {
+    elements.beatsPlayedEl.textContent = `${index + 1}`;
+    state.lastBeatIndex = index;
+  });
+  autocanonizer.setOnEnded(() => {
+    if (state.isRunning) {
+      stopPlayback(context);
+    }
+  });
+
   engine.onUpdate((engineState) => {
     elements.beatsPlayedEl.textContent = `${engineState.beatsPlayed}`;
     if (engineState.currentBeatIndex >= 0) {
@@ -169,7 +183,7 @@ export function bootstrap() {
         engineState.lastJumped && engineState.lastJumpFromIndex !== null
           ? engineState.lastJumpFromIndex
           : state.lastBeatIndex;
-      visualizations[state.activeVizIndex]?.update(
+      jukebox.update(
         engineState.currentBeatIndex,
         engineState.lastJumped,
         jumpFrom,
@@ -209,6 +223,7 @@ export function bootstrap() {
   resetForNewTrack(context);
   syncFavoriteButton();
 
+  applyModeFromUrl();
   handleRouteChange(context, playbackDeps, window.location.pathname).catch(
     (err) => {
       console.warn(`Route load failed: ${String(err)}`);
@@ -226,7 +241,7 @@ export function bootstrap() {
         options?: { replace?: boolean; youtubeId?: string | null },
       ) => navigateToTabWithState(tabId, options),
       updateTrackUrl: (youtubeId: string, replace?: boolean) =>
-        updateTrackUrl(youtubeId, replace, state.tuningParams),
+        updateTrackUrl(youtubeId, replace, state.tuningParams, state.playMode),
       setAnalysisStatus: (message: string, spinning: boolean) =>
         setAnalysisStatus(context, message, spinning),
       setLoadingProgress: (progress: number | null, message?: string | null) =>
@@ -261,6 +276,7 @@ export function bootstrap() {
   }
 
   function handlePopState() {
+    applyModeFromUrl();
     handleRouteChange(context, playbackDeps, window.location.pathname).catch(
       (err) => {
         console.warn(`Route load failed: ${String(err)}`);
@@ -348,6 +364,9 @@ export function bootstrap() {
     elements.vizButtons.forEach((button) => {
       button.addEventListener("click", handleVizButtonClick);
     });
+    elements.playModeButtons.forEach((button) => {
+      button.addEventListener("click", handleModeClick);
+    });
     elements.themeLinks.forEach((link) => {
       link.addEventListener("click", handleThemeClick);
     });
@@ -355,10 +374,8 @@ export function bootstrap() {
     window.addEventListener("keydown", handleKeydown);
     window.addEventListener("keyup", handleKeyup);
 
-    visualizations.forEach((viz) => {
-      viz.setOnSelect(handleBeatSelect);
-      viz.setOnEdgeSelect(handleEdgeSelect);
-    });
+    jukebox.setOnSelect(handleBeatSelect);
+    jukebox.setOnEdgeSelect(handleEdgeSelect);
   }
 
   function setTopSongsTab(tabId: "top" | "favorites") {
@@ -1153,7 +1170,9 @@ export function bootstrap() {
 
   function handleVolumeInput() {
     elements.volumeVal.textContent = elements.volumeInput.value;
-    player.setVolume(Number(elements.volumeInput.value) / 100);
+    const volume = Number(elements.volumeInput.value) / 100;
+    player.setVolume(volume);
+    autocanonizer.setVolume(volume);
   }
 
   function handleOpenTuning() {
@@ -1223,7 +1242,7 @@ export function bootstrap() {
       updateFullscreenButton(false);
       releaseWakeLock(context);
     }
-    visualizations[state.activeVizIndex]?.resizeNow();
+    jukebox.resizeActive();
   }
 
   function updateFullscreenButton(isFullscreen: boolean) {
@@ -1307,6 +1326,13 @@ export function bootstrap() {
     setActiveVisualization(idx);
   }
 
+  function handleModeClick(event: Event) {
+    const button = event.currentTarget as HTMLButtonElement | null;
+    const mode =
+      button?.dataset.playMode === "autocanonizer" ? "autocanonizer" : "jukebox";
+    setPlayMode(mode);
+  }
+
   function handleThemeClick(event: Event) {
     const link = event.currentTarget as HTMLButtonElement | null;
     const value = link?.dataset.theme === "light" ? "light" : "dark";
@@ -1325,6 +1351,9 @@ export function bootstrap() {
       togglePlayback(context);
       return;
     }
+    if (state.playMode === "autocanonizer") {
+      return;
+    }
     if (
       (event.key === "Delete" || event.key === "Backspace") &&
       state.selectedEdge &&
@@ -1336,13 +1365,13 @@ export function bootstrap() {
       state.vizData = engine.getVisualizationData();
       const data = state.vizData;
       if (data) {
-        visualizations.forEach((viz) => viz.setData(data));
+        jukebox.setData(data);
       }
-      visualizations.forEach((viz) => viz.refresh());
-      visualizations[state.activeVizIndex]?.resizeNow();
+      jukebox.refresh();
+      jukebox.resizeActive();
       updateTrackInfo(context);
       state.selectedEdge = null;
-      visualizations.forEach((viz) => viz.setSelectedEdge(null));
+      jukebox.setSelectedEdge(null);
       return;
     }
     if (event.key === "Shift" && state.isRunning && !state.shiftBranching) {
@@ -1352,6 +1381,9 @@ export function bootstrap() {
   }
 
   function handleKeyup(event: KeyboardEvent) {
+    if (state.playMode === "autocanonizer") {
+      return;
+    }
     if (event.key === "Shift" && state.shiftBranching) {
       state.shiftBranching = false;
       engine.setForceBranch(false);
@@ -1359,6 +1391,9 @@ export function bootstrap() {
   }
 
   function handleBeatSelect(index: number) {
+    if (state.playMode === "autocanonizer") {
+      return;
+    }
     if (!state.vizData) {
       return;
     }
@@ -1368,12 +1403,15 @@ export function bootstrap() {
     }
     player.seek(beat.start);
     state.lastBeatIndex = index;
-    visualizations[state.activeVizIndex]?.update(index, true, null);
+    jukebox.update(index, true, null);
   }
 
   function handleEdgeSelect(edge: Edge | null) {
+    if (state.playMode === "autocanonizer") {
+      return;
+    }
     state.selectedEdge = edge;
-    visualizations[state.activeVizIndex]?.setSelectedEdge(edge);
+    jukebox.setSelectedEdgeActive(edge);
   }
 
   function navigateToTabWithState(
@@ -1382,7 +1420,13 @@ export function bootstrap() {
   ) {
     setActiveTabWithRefresh(tabId);
     const tuningParams = state.tuningParams ?? getTuningParamsStringFromUrl();
-    navigateToTab(tabId, options, getCurrentTrackId(), tuningParams);
+    navigateToTab(
+      tabId,
+      options,
+      getCurrentTrackId(),
+      tuningParams,
+      state.playMode
+    );
   }
 
   function setActiveTabWithRefresh(tabId: TabId) {
@@ -1452,6 +1496,9 @@ export function bootstrap() {
     tuningParams.forEach((value, key) => {
       url.searchParams.set(key, value);
     });
+    if (state.playMode === "autocanonizer") {
+      url.searchParams.set("mode", "autocanonizer");
+    }
     const shortUrl = url.toString();
     try {
       await navigator.clipboard.writeText(shortUrl);
@@ -1465,29 +1512,12 @@ export function bootstrap() {
     if (
       index === state.activeVizIndex ||
       index < 0 ||
-      index >= visualizations.length
+      index >= jukebox.getCount()
     ) {
       return;
     }
-    visualizations[state.activeVizIndex]?.setVisible(false);
     state.activeVizIndex = index;
-    visualizations[state.activeVizIndex]?.setVisible(true);
-    visualizations[state.activeVizIndex]?.resizeNow();
-    if (state.vizData) {
-      visualizations[state.activeVizIndex]?.setData(state.vizData);
-    }
-    visualizations[state.activeVizIndex]?.setSelectedEdge(
-      state.selectedEdge && !state.selectedEdge.deleted
-        ? state.selectedEdge
-        : null,
-    );
-    if (state.lastBeatIndex !== null) {
-      visualizations[state.activeVizIndex]?.update(
-        state.lastBeatIndex,
-        false,
-        null,
-      );
-    }
+    jukebox.setActiveIndex(index);
     elements.vizButtons.forEach((button) => {
       button.classList.toggle(
         "active",
@@ -1495,5 +1525,66 @@ export function bootstrap() {
       );
     });
     localStorage.setItem(vizStorageKey, String(state.activeVizIndex));
+  }
+
+  function getPlayModeFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("mode") === "autocanonizer" ? "autocanonizer" : "jukebox";
+  }
+
+  function applyModeFromUrl() {
+    setPlayMode(getPlayModeFromUrl());
+  }
+
+  function setPlayMode(mode: "jukebox" | "autocanonizer") {
+    if (state.playMode === mode) {
+      return;
+    }
+    if (state.isRunning) {
+      stopPlayback(context);
+    }
+    state.playMode = mode;
+    elements.jukeboxViz.classList.toggle(
+      "is-canonizer",
+      mode === "autocanonizer",
+    );
+    elements.playModeButtons.forEach((button) => {
+      button.classList.toggle(
+        "active",
+        button.dataset.playMode === state.playMode,
+      );
+    });
+    elements.tuningButton.disabled = mode === "autocanonizer";
+    elements.tuningButton.classList.toggle(
+      "is-hidden",
+      mode === "autocanonizer",
+    );
+    elements.infoButton.classList.toggle(
+      "is-hidden",
+      mode === "autocanonizer",
+    );
+    autocanonizer.setVisible(mode === "autocanonizer");
+    jukebox.setVisible(mode === "jukebox");
+    if (state.trackTitle || state.trackArtist) {
+      const baseTitle = state.trackTitle ?? "Unknown";
+      const withSuffix =
+        mode === "autocanonizer"
+          ? `${baseTitle} (autocanonized)`
+          : baseTitle;
+      const displayTitle = state.trackArtist
+        ? `${withSuffix} — ${state.trackArtist}`
+        : withSuffix;
+      elements.playTitle.textContent = displayTitle;
+      elements.vizNowPlayingEl.textContent = displayTitle;
+    }
+    if (state.activeTabId === "play") {
+      const currentId = getCurrentTrackId();
+      if (currentId) {
+        updateTrackUrl(currentId, true, state.tuningParams, state.playMode);
+      } else {
+        navigateToTab("play", { replace: true }, null, state.tuningParams, state.playMode);
+      }
+    }
+    updateVizVisibility(context);
   }
 }

@@ -30,6 +30,14 @@ export class BufferedAudioPlayer {
     await this.loadBuffer(buffer);
   }
 
+  getBuffer(): AudioBuffer | null {
+    return this.buffer;
+  }
+
+  getContext(): AudioContext {
+    return this.context;
+  }
+
   play() {
     if (!this.buffer || this.playing) {
       return;

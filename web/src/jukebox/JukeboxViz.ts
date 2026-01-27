@@ -1,4 +1,5 @@
-import { Edge, QuantumBase } from "../engine/types";
+import type { JukeboxEngine } from "../engine";
+import type { Edge, QuantumBase } from "../engine/types";
 import {
   BEAT_AVOID_RADIUS_PX,
   BEAT_SELECT_RADIUS_PX,
@@ -6,7 +7,14 @@ import {
   MAX_EDGE_SAMPLES,
   MAX_EDGES_BASE,
 } from "../app/constants";
-import { distanceToQuadratic, distanceToSegment } from "./geometry";
+
+type VizData = NonNullable<ReturnType<JukeboxEngine["getVisualizationData"]>>;
+
+type LastUpdate = {
+  index: number;
+  animate: boolean;
+  previousIndex: number | null;
+};
 
 interface VisualizationData {
   beats: QuantumBase[];
@@ -19,13 +27,13 @@ interface JumpLine {
   at: number;
 }
 
-export type Positioner = (
+type Positioner = (
   count: number,
   width: number,
   height: number
 ) => Array<{ x: number; y: number }>;
 
-export class CanvasViz {
+class CanvasViz {
   private container: HTMLElement;
   private baseCanvas: HTMLCanvasElement;
   private overlayCanvas: HTMLCanvasElement;
@@ -269,7 +277,12 @@ export class CanvasViz {
       return;
     }
     if (this.selectedEdge && !this.selectedEdge.deleted) {
-      this.drawEdge(this.overlayCtx, this.selectedEdge, this.theme.edgeSelected, 2.5);
+      this.drawEdge(
+        this.overlayCtx,
+        this.selectedEdge,
+        this.theme.edgeSelected,
+        2.5
+      );
     }
     if (this.currentIndex < 0) {
       return;
@@ -507,4 +520,272 @@ export class CanvasViz {
       mid.y + normY * (centerDist * 0.5),
     ];
   }
+}
+
+function createVisualizations(
+  vizLayer: HTMLElement,
+  positioners?: Positioner[],
+  enableInteraction = true
+) {
+  const list = positioners ?? [
+    JukeboxViz.createClassicPositioner(),
+    (count: number, width: number, height: number) => {
+      const cx = width / 2;
+      const cy = height / 2;
+      const maxRadius = Math.min(width, height) * 0.42;
+      const minRadius = Math.min(width, height) * 0.08;
+      const turns = 3;
+      return Array.from({ length: count }, (_, i) => {
+        const t = i / count;
+        const angle = t * Math.PI * 2 * turns - Math.PI / 2;
+        const radius = minRadius + (maxRadius - minRadius) * t;
+        return {
+          x: cx + Math.cos(angle) * radius,
+          y: cy + Math.sin(angle) * radius,
+        };
+      });
+    },
+    (count: number, width: number, height: number) => {
+      const cols = Math.ceil(Math.sqrt(count));
+      const rows = Math.ceil(count / cols);
+      const padding = 40;
+      const gridW = width - padding * 2;
+      const gridH = height - padding * 2;
+      return Array.from({ length: count }, (_, i) => {
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        return {
+          x: padding + (col / Math.max(1, cols - 1)) * gridW,
+          y: padding + (row / Math.max(1, rows - 1)) * gridH,
+        };
+      });
+    },
+    (count: number, width: number, height: number) => {
+      const padding = 40;
+      const amp = height * 0.25;
+      const center = height / 2;
+      const span = width - padding * 2;
+      const waveTurns = 3;
+      return Array.from({ length: count }, (_, i) => {
+        const t = i / Math.max(1, count - 1);
+        return {
+          x: padding + span * t,
+          y: center + Math.sin(t * Math.PI * 2 * waveTurns) * amp,
+        };
+      });
+    },
+    (count: number, width: number, height: number) => {
+      const cx = width / 2;
+      const cy = height / 2;
+      const ampX = width * 0.35;
+      const ampY = height * 0.25;
+      return Array.from({ length: count }, (_, i) => {
+        const t = (i / count) * Math.PI * 2;
+        return {
+          x: cx + Math.sin(t) * ampX,
+          y: cy + Math.sin(t * 2) * ampY,
+        };
+      });
+    },
+    (count: number, width: number, height: number) => {
+      const cx = width / 2;
+      const cy = height / 2;
+      const maxRadius = Math.min(width, height) * 0.42;
+      const minRadius = Math.min(width, height) * 0.08;
+      const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+      return Array.from({ length: count }, (_, i) => {
+        const t = i / Math.max(1, count - 1);
+        const angle = i * goldenAngle;
+        const radius = minRadius + (maxRadius - minRadius) * Math.sqrt(t);
+        const wobble =
+          0.06 * Math.sin(i * 12.9898) + 0.04 * Math.cos(i * 4.1414);
+        const r = radius * (1 + wobble);
+        return {
+          x: cx + Math.cos(angle) * r,
+          y: cy + Math.sin(angle) * r,
+        };
+      });
+    },
+  ];
+  return list.map(
+    (positioner) => new CanvasViz(vizLayer, positioner, { enableInteraction })
+  );
+}
+
+export class JukeboxViz {
+  private visualizations: CanvasViz[];
+  private activeIndex = 0;
+  private visible = true;
+  private data: VizData | null = null;
+  private selectedEdge: Edge | null = null;
+  private lastUpdate: LastUpdate | null = null;
+
+  static createClassicPositioner(): Positioner {
+    return (count: number, width: number, height: number) => {
+      const radius = Math.min(width, height) * 0.4;
+      const cx = width / 2;
+      const cy = height / 2;
+      return Array.from({ length: count }, (_, i) => {
+        const angle = (i / count) * Math.PI * 2 - Math.PI / 2;
+        return {
+          x: cx + Math.cos(angle) * radius,
+          y: cy + Math.sin(angle) * radius,
+        };
+      });
+    };
+  }
+
+  constructor(
+    vizLayer: HTMLElement,
+    options?: { positioners?: Positioner[]; enableInteraction?: boolean }
+  ) {
+    const enableInteraction = options?.enableInteraction ?? true;
+    this.visualizations = createVisualizations(
+      vizLayer,
+      options?.positioners,
+      enableInteraction
+    );
+    this.setActiveIndex(0);
+  }
+
+  getCount() {
+    return this.visualizations.length;
+  }
+
+  setActiveIndex(index: number) {
+    if (index < 0 || index >= this.visualizations.length) {
+      return;
+    }
+    this.activeIndex = index;
+    if (this.visible) {
+      this.visualizations.forEach((viz, vizIndex) => {
+        viz.setVisible(vizIndex === index);
+      });
+    } else {
+      this.visualizations.forEach((viz) => viz.setVisible(false));
+    }
+    this.visualizations[index]?.resizeNow();
+    if (this.data) {
+      this.visualizations[index]?.setData(this.data);
+    }
+    if (this.selectedEdge) {
+      this.visualizations[index]?.setSelectedEdge(this.selectedEdge);
+    }
+    if (this.lastUpdate) {
+      this.visualizations[index]?.update(
+        this.lastUpdate.index,
+        this.lastUpdate.animate,
+        this.lastUpdate.previousIndex
+      );
+    }
+  }
+
+  setVisible(visible: boolean) {
+    this.visible = visible;
+    if (!visible) {
+      this.visualizations.forEach((viz) => viz.setVisible(false));
+      return;
+    }
+    this.visualizations.forEach((viz, index) => {
+      viz.setVisible(index === this.activeIndex);
+    });
+  }
+
+  setData(data: VizData) {
+    this.data = data;
+    this.visualizations.forEach((viz) => viz.setData(data));
+  }
+
+  refresh() {
+    this.visualizations.forEach((viz) => viz.refresh());
+  }
+
+  resizeNow() {
+    this.visualizations.forEach((viz) => viz.resizeNow());
+  }
+
+  resizeActive() {
+    this.visualizations[this.activeIndex]?.resizeNow();
+  }
+
+  update(index: number, animate: boolean, previousIndex: number | null) {
+    this.lastUpdate = { index, animate, previousIndex };
+    this.visualizations[this.activeIndex]?.update(index, animate, previousIndex);
+  }
+
+  reset() {
+    this.visualizations.forEach((viz) => viz.reset());
+  }
+
+  destroy() {
+    this.visualizations.forEach((viz) => viz.destroy());
+  }
+
+  setOnSelect(handler: (index: number) => void) {
+    this.visualizations.forEach((viz) => viz.setOnSelect(handler));
+  }
+
+  setOnEdgeSelect(handler: (edge: Edge | null) => void) {
+    this.visualizations.forEach((viz) => viz.setOnEdgeSelect(handler));
+  }
+
+  setSelectedEdge(edge: Edge | null) {
+    this.selectedEdge = edge;
+    this.visualizations.forEach((viz) => viz.setSelectedEdge(edge));
+  }
+
+  setSelectedEdgeActive(edge: Edge | null) {
+    this.selectedEdge = edge;
+    this.visualizations[this.activeIndex]?.setSelectedEdge(edge);
+  }
+}
+
+function distanceToSegment(
+  px: number,
+  py: number,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number
+) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  if (dx === 0 && dy === 0) {
+    return Math.hypot(px - x1, py - y1);
+  }
+  const t = ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy);
+  if (t <= 0) {
+    return Math.hypot(px - x1, py - y1);
+  }
+  if (t >= 1) {
+    return Math.hypot(px - x2, py - y2);
+  }
+  const projX = x1 + t * dx;
+  const projY = y1 + t * dy;
+  return Math.hypot(px - projX, py - projY);
+}
+
+function distanceToQuadratic(
+  px: number,
+  py: number,
+  x1: number,
+  y1: number,
+  cx: number,
+  cy: number,
+  x2: number,
+  y2: number
+) {
+  let closest = Infinity;
+  const steps = 20;
+  for (let i = 0; i <= steps; i += 1) {
+    const t = i / steps;
+    const it = 1 - t;
+    const qx = it * it * x1 + 2 * it * t * cx + t * t * x2;
+    const qy = it * it * y1 + 2 * it * t * cy + t * t * y2;
+    const d = Math.hypot(px - qx, py - qy);
+    if (d < closest) {
+      closest = d;
+    }
+  }
+  return closest;
 }

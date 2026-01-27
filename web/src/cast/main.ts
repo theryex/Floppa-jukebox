@@ -1,7 +1,7 @@
 import "../cast/style.css";
 import { BufferedAudioPlayer } from "../audio/BufferedAudioPlayer";
 import { JukeboxEngine } from "../engine";
-import { CanvasViz } from "../visualization/CanvasViz";
+import { JukeboxViz } from "../jukebox/JukeboxViz";
 import { fetchAnalysis, fetchAudio, fetchJobByYoutube } from "../app/api";
 import { formatDuration } from "../app/format";
 
@@ -218,20 +218,7 @@ async function bootstrap() {
     value: 1,
     configurable: true,
   });
-  const positioner = (count: number, width: number, height: number) => {
-    const radius = Math.min(width, height) * 0.4;
-    const cx = width / 2;
-    const cy = height / 2;
-    return Array.from({ length: count }, (_, i) => {
-      const angle = (i / count) * Math.PI * 2 - Math.PI / 2;
-      return {
-        x: cx + Math.cos(angle) * radius,
-        y: cy + Math.sin(angle) * radius,
-      };
-    });
-  };
-
-  let viz: CanvasViz | null = null;
+  let viz: JukeboxViz | null = null;
   const destroyViz = () => {
     if (viz) {
       viz.destroy();
@@ -241,7 +228,11 @@ async function bootstrap() {
 
   const createViz = () => {
     destroyViz();
-    viz = new CanvasViz(elements.vizLayer, positioner, { enableInteraction: false });
+    viz = new JukeboxViz(elements.vizLayer, {
+      positioners: [JukeboxViz.createClassicPositioner()],
+      enableInteraction: false,
+    });
+    viz.setActiveIndex(0);
     viz.setVisible(false);
   };
 

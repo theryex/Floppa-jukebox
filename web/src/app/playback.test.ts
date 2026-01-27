@@ -76,14 +76,37 @@ function createContext(overrides?: Partial<AppContext>): AppContext {
   const player = {
     getVolume: vi.fn(() => 0.5),
     getDuration: vi.fn(() => null),
+    stop: vi.fn(),
+  };
+  const autocanonizer = {
+    setAnalysis: vi.fn(),
+    setAudio: vi.fn(),
+    setVolume: vi.fn(),
+    reset: vi.fn(),
+    stop: vi.fn(),
+    start: vi.fn(),
+    isReady: vi.fn(() => false),
+    setOnBeat: vi.fn(),
+    setOnEnded: vi.fn(),
+    setVisible: vi.fn(),
+    resizeNow: vi.fn(),
+  };
+  const jukebox = {
+    setData: vi.fn(),
+    setSelectedEdge: vi.fn(),
+    resizeActive: vi.fn(),
+    reset: vi.fn(),
+    update: vi.fn(),
   };
   return {
     elements: elements as unknown as AppContext["elements"],
     engine: engine as unknown as AppContext["engine"],
     player: player as unknown as AppContext["player"],
-    visualizations: [{ setData: vi.fn() }] as unknown as AppContext["visualizations"],
+    autocanonizer: autocanonizer as unknown as AppContext["autocanonizer"],
+    jukebox: jukebox as unknown as AppContext["jukebox"],
     defaultConfig: engineConfig as AppContext["defaultConfig"],
     state: {
+      playMode: "jukebox",
       autoComputedThreshold: null,
       vizData: null,
       playTimerMs: 0,
