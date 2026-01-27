@@ -106,7 +106,7 @@ export function updateTrackInfo(context: AppContext) {
 }
 
 export function updateVizVisibility(context: AppContext) {
-  const { elements, visualizations, state } = context;
+  const { autocanonizer, elements, jukebox, state } = context;
   const hasTrack = Boolean(state.lastYouTubeId || state.lastJobId);
   if (state.audioLoaded && state.analysisLoaded) {
     elements.playStatusPanel.classList.add("hidden");
@@ -115,9 +115,13 @@ export function updateVizVisibility(context: AppContext) {
     elements.playButton.classList.remove("hidden");
     updatePlayButton(context, state.isRunning);
     elements.playTabButton.disabled = false;
-    visualizations[state.activeVizIndex]?.resizeNow();
+    if (state.playMode === "autocanonizer") {
+      autocanonizer.resizeNow();
+    } else {
+      jukebox.resizeActive();
+    }
     elements.vizButtons.forEach((button) => {
-      button.disabled = false;
+      button.disabled = state.playMode === "autocanonizer";
     });
   } else {
     elements.playStatusPanel.classList.remove("hidden");
@@ -183,7 +187,7 @@ export function syncTuningUI(context: AppContext) {
 }
 
 export function applyTuningChanges(context: AppContext) {
-  const { elements, engine, state, visualizations } = context;
+  const { elements, engine, jukebox, state } = context;
   const threshold = Number(elements.thresholdInput.value);
   const computed = Number(elements.computedThresholdEl.textContent);
   const useAutoThreshold =
@@ -214,7 +218,7 @@ export function applyTuningChanges(context: AppContext) {
   state.vizData = engine.getVisualizationData();
   const data = state.vizData;
   if (data) {
-    visualizations.forEach((viz) => viz.setData(data));
+    jukebox.setData(data);
   }
   const graph = engine.getGraphState();
   updateTrackInfo(context);
@@ -240,13 +244,13 @@ export function applyTuningChanges(context: AppContext) {
 }
 
 export function resetTuningDefaults(context: AppContext) {
-  const { engine, state, visualizations, player } = context;
+  const { autocanonizer, engine, jukebox, state, player } = context;
   engine.updateConfig(context.defaultConfig);
   engine.rebuildGraph();
   state.vizData = engine.getVisualizationData();
   const data = state.vizData;
   if (data) {
-    visualizations.forEach((viz) => viz.setData(data));
+    jukebox.setData(data);
   }
   const graph = engine.getGraphState();
   state.autoComputedThreshold = graph
@@ -255,6 +259,7 @@ export function resetTuningDefaults(context: AppContext) {
   state.tuningParams = null;
   writeTuningParamsToUrl(null, true);
   player.setVolume(DEFAULT_VOLUME);
+  autocanonizer.setVolume(DEFAULT_VOLUME);
   syncTuningUI(context);
   updateTrackInfo(context);
 }
@@ -279,7 +284,11 @@ export function stopListenTimer(context: AppContext) {
 }
 
 export function stopPlayback(context: AppContext) {
-  const { engine, state } = context;
+  const { autocanonizer, engine, player, state } = context;
+  if (state.playMode === "autocanonizer") {
+    autocanonizer.stop();
+    player.stop();
+  }
   engine.stopJukebox();
   if (state.lastPlayStamp !== null) {
     state.playTimerMs += performance.now() - state.lastPlayStamp;
@@ -292,9 +301,36 @@ export function stopPlayback(context: AppContext) {
 }
 
 export function togglePlayback(context: AppContext) {
-  const { engine, elements, visualizations, player, state } = context;
+  const { autocanonizer, engine, elements, jukebox, player, state } = context;
   if (!state.isRunning) {
     try {
+      if (state.playMode === "autocanonizer") {
+        if (!autocanonizer.isReady()) {
+          console.warn("Autocanonizer not ready");
+          return;
+        }
+        player.stop();
+        engine.stopJukebox();
+        state.playTimerMs = 0;
+        state.lastPlayStamp = null;
+        updateListenTimeDisplay(context);
+        elements.beatsPlayedEl.textContent = "0";
+        state.lastBeatIndex = null;
+        if (elements.vizStats) {
+          elements.vizStats.classList.remove("pulse");
+          void elements.vizStats.offsetWidth;
+          elements.vizStats.classList.add("pulse");
+        }
+        autocanonizer.start();
+        state.lastPlayStamp = performance.now();
+        state.isRunning = true;
+        startListenTimer(context);
+        updatePlayButton(context, true);
+        if (document.fullscreenElement) {
+          requestWakeLock(context);
+        }
+        return;
+      }
       if (player.getDuration() === null) {
         console.warn("Audio not loaded");
         return;
@@ -306,7 +342,7 @@ export function togglePlayback(context: AppContext) {
       updateListenTimeDisplay(context);
       elements.beatsPlayedEl.textContent = "0";
       state.lastBeatIndex = null;
-      visualizations[state.activeVizIndex]?.reset();
+      jukebox.reset();
       if (elements.vizStats) {
         elements.vizStats.classList.remove("pulse");
         void elements.vizStats.offsetWidth;
@@ -354,13 +390,14 @@ export function resetForNewTrack(
   context: AppContext,
   options?: { clearTuning?: boolean }
 ) {
-  const { elements, engine, visualizations, state, defaultConfig } = context;
+  const { autocanonizer, elements, engine, jukebox, state, defaultConfig } =
+    context;
   const shouldClearTuning = options?.clearTuning ?? false;
   cancelPoll(context);
   state.shiftBranching = false;
   engine.setForceBranch(false);
   state.selectedEdge = null;
-  visualizations.forEach((viz) => viz.setSelectedEdge(null));
+  jukebox.setSelectedEdge(null);
   engine.clearDeletedEdges();
   state.audioLoaded = false;
   state.analysisLoaded = false;
@@ -384,6 +421,7 @@ export function resetForNewTrack(
   if (state.isRunning) {
     stopPlayback(context);
   }
+  autocanonizer.reset();
   state.autoComputedThreshold = null;
   if (shouldClearTuning) {
     state.tuningParams = null;
@@ -402,17 +440,16 @@ export function resetForNewTrack(
   state.vizData = null;
   updateTrackInfo(context);
   const emptyVizData = { beats: [], edges: [] };
-  visualizations.forEach((viz) => {
-    viz.setData(emptyVizData);
-    viz.reset();
-  });
+  jukebox.setData(emptyVizData);
+  jukebox.reset();
 }
 
 export async function loadAudioFromJob(context: AppContext, jobId: string) {
-  const { player, state } = context;
+  const { autocanonizer, player, state } = context;
   try {
     const buffer = await fetchAudio(jobId);
     await player.decode(buffer);
+    autocanonizer.setAudio(player.getBuffer(), player.getContext());
     state.audioLoaded = true;
     state.audioLoadInFlight = false;
     updateVizVisibility(context);
@@ -469,20 +506,21 @@ export function applyAnalysisResult(
     return false;
   }
   maybeUpdateDeleteEligibility(context, response, response.id);
-  const { elements, engine, state, visualizations } = context;
+  const { autocanonizer, elements, engine, jukebox, state } = context;
   applyTuningParamsFromUrl(context);
   const useAutoThreshold = engine.getConfig().currentThreshold === 0;
   engine.loadAnalysis(response.result);
+  autocanonizer.setAnalysis(response.result, response.result.track?.duration);
   const graph = engine.getGraphState();
   state.autoComputedThreshold =
     useAutoThreshold && graph ? Math.round(graph.currentThreshold) : null;
   state.vizData = engine.getVisualizationData();
   const data = state.vizData;
   if (data) {
-    visualizations.forEach((viz) => viz.setData(data));
+    jukebox.setData(data);
   }
   state.selectedEdge = null;
-  visualizations.forEach((viz) => viz.setSelectedEdge(null));
+  jukebox.setSelectedEdge(null);
   state.analysisLoaded = true;
   updateVizVisibility(context);
   const resultTrack = response.result.track ?? null;
@@ -496,9 +534,12 @@ export function applyAnalysisResult(
       ? track.duration
       : null;
   if (title || artist) {
-    const displayTitle = artist
-      ? `${title ?? "Unknown"} — ${artist}`
-      : `${title}`;
+    const baseTitle = title ?? "Unknown";
+    const withSuffix =
+      state.playMode === "autocanonizer"
+        ? `${baseTitle} (autocanonized)`
+        : baseTitle;
+    const displayTitle = artist ? `${withSuffix} — ${artist}` : withSuffix;
     elements.playTitle.textContent = displayTitle;
     elements.vizNowPlayingEl.textContent = displayTitle;
   } else {
@@ -769,7 +810,7 @@ export async function tryLoadCachedAudio(
   context: AppContext,
   youtubeId: string
 ) {
-  const { player, state } = context;
+  const { autocanonizer, player, state } = context;
   try {
     const cached = await readCachedTrack(youtubeId);
     if (!cached?.audio) {
@@ -777,6 +818,7 @@ export async function tryLoadCachedAudio(
     }
     state.lastJobId = cached.jobId ?? null;
     await player.decode(cached.audio);
+    autocanonizer.setAudio(player.getBuffer(), player.getContext());
     state.audioLoaded = true;
     state.audioLoadInFlight = false;
     updateVizVisibility(context);

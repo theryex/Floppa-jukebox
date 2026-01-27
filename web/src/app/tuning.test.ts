@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it, beforeEach, vi } from "vitest";
 import type { AppContext } from "./context";
 import type { JukeboxConfig } from "../engine/types";
 import {
@@ -44,8 +44,9 @@ function createContext(
     engine: engine as AppContext["engine"],
     elements: {} as AppContext["elements"],
     player: {} as AppContext["player"],
-    visualizations: [],
-    state: { tuningParams: null } as AppContext["state"],
+    autocanonizer: {} as AppContext["autocanonizer"],
+    jukebox: { refresh: vi.fn() } as unknown as AppContext["jukebox"],
+    state: { tuningParams: null, playMode: "jukebox" } as AppContext["state"],
   };
 }
 

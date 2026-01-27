@@ -25,9 +25,11 @@ function createContext(): AppContext {
     } as AppContext["elements"],
     engine: {} as AppContext["engine"],
     player: {} as AppContext["player"],
-    visualizations: [],
+    autocanonizer: {} as AppContext["autocanonizer"],
+    jukebox: { refresh: vi.fn() } as unknown as AppContext["jukebox"],
     defaultConfig: {} as AppContext["defaultConfig"],
     state: {
+      playMode: "jukebox",
       lastYouTubeId: null,
       lastJobId: null,
       audioLoaded: false,

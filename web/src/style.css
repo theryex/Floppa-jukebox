@@ -670,6 +670,14 @@ button:hover {
   gap: 6px;
 }
 
+.tune-toggle.is-hidden {
+  display: none !important;
+}
+
+.info-toggle.is-hidden {
+  display: none !important;
+}
+
 .play-toggle {
   border: 1px solid var(--border-control);
   border-radius: 8px;
@@ -972,6 +980,10 @@ button:hover {
   cursor: pointer;
 }
 
+#jukebox-viz.is-canonizer {
+  cursor: default;
+}
+
 #viz-panel:fullscreen {
   padding: 0;
   margin: 0;
@@ -1009,6 +1021,26 @@ button:hover {
   z-index: 1;
 }
 
+.canonizer-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: none;
+}
+
+.canonizer-layer canvas {
+  position: absolute;
+  inset: 0;
+}
+
+#jukebox-viz.is-canonizer .canonizer-layer {
+  display: block;
+}
+
+#jukebox-viz.is-canonizer .viz-layer {
+  display: none;
+}
+
 .viz-top {
   position: absolute;
   top: 12px;
@@ -1043,6 +1075,7 @@ button:hover {
   background: var(--viz-overlay);
   backdrop-filter: blur(8px);
 }
+
 
 .viz-bottom-left {
   display: flex;
@@ -1101,6 +1134,22 @@ button:hover {
   gap: 6px;
   font-size: 12px;
   color: var(--muted);
+}
+
+.viz-actions {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.viz-sep {
+  opacity: 0.5;
+  padding: 0 2px;
+}
+
+#jukebox-viz.is-canonizer .viz-controls [data-viz],
+#jukebox-viz.is-canonizer .viz-controls .viz-sep,
+#jukebox-viz.is-canonizer .viz-controls .viz-label {
+  display: none;
 }
 
 .viz-btn {

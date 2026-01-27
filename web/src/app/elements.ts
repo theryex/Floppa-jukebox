@@ -23,9 +23,21 @@ export function getElements() {
     document.querySelector<HTMLDivElement>("#viz-layer"),
     "#viz-layer"
   );
+  const canonizerLayer = requireElement(
+    document.querySelector<HTMLDivElement>("#canonizer-layer"),
+    "#canonizer-layer"
+  );
+  const jukeboxViz = requireElement(
+    document.querySelector<HTMLDivElement>("#jukebox-viz"),
+    "#jukebox-viz"
+  );
   const vizButtons = requireNonEmpty(
     Array.from(document.querySelectorAll<HTMLButtonElement>("[data-viz]")),
     "[data-viz]"
+  );
+  const playModeButtons = requireNonEmpty(
+    Array.from(document.querySelectorAll<HTMLButtonElement>("[data-play-mode]")),
+    "[data-play-mode]"
   );
   const playStatusPanel = requireElement(
     document.querySelector<HTMLDivElement>("#play-status"),
@@ -353,7 +365,10 @@ export function getElements() {
     vizNowPlayingEl,
     vizPanel,
     vizLayer,
+    canonizerLayer,
+    jukeboxViz,
     vizButtons,
+    playModeButtons,
     playStatusPanel,
     playMenu,
     tabButtons,
