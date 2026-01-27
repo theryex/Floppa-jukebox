@@ -6,9 +6,11 @@ cd /app/api
 # Determine which calibration file to use
 if [ "${CALIBRATION_MODE:-legacy}" = "upstream" ]; then
     export GENERATOR_CALIBRATION="${GENERATOR_CALIBRATION:-/app/engine/calibration.json}"
+    export ENGINE_CONFIG="$GENERATOR_CALIBRATION"
     echo "Using upstream calibration: $GENERATOR_CALIBRATION"
 else
     export GENERATOR_CONFIG="${GENERATOR_CONFIG:-/app/engine/tuned_config.json}"
+    export ENGINE_CONFIG="$GENERATOR_CONFIG"
     echo "Using legacy config: $GENERATOR_CONFIG"
 fi
 

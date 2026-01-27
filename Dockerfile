@@ -93,7 +93,9 @@ ENV FOREVER_JUKEBOX_GPU=${GPU_MODE} \
     PYTHONPATH="/app/api" \
     GENERATOR_REPO="/app/engine" \
     GENERATOR_CONFIG="/app/engine/tuned_config.json" \
-    GENERATOR_CALIBRATION="/app/engine/calibration.json"
+    GENERATOR_CALIBRATION="/app/engine/calibration.json" \
+    ENGINE_REPO="/app/engine" \
+    ENGINE_CONFIG="/app/engine/tuned_config.json"
 
 # Install only RUNTIME shared libraries (NO compilers, NO -dev packages)
 # Note: In Bookworm, libfftw3 was split by precision type
