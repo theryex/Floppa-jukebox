@@ -19,7 +19,8 @@ export default defineConfig(() => {
   return {
     plugins: [
       legacy({
-        targets: ["defaults", "not IE 11"],
+        targets: ["chrome 63"],
+        additionalLegacyPolyfills: ["regenerator-runtime/runtime"],
       }),
       castRewritePlugin(),
     ],
