@@ -399,7 +399,7 @@ export function bootstrap() {
     elements.topSongsList.classList.toggle("hidden", tabId !== "top");
     elements.favoritesList.classList.toggle("hidden", tabId !== "favorites");
     elements.topListTitle.textContent =
-      tabId === "top" ? "Top 20" : "Favorites";
+      tabId === "top" ? `Top ${TOP_SONGS_LIMIT}` : "Favorites";
     closeFavoritesSyncMenu();
     updateFavoritesSyncControls();
   }
@@ -1342,7 +1342,9 @@ export function bootstrap() {
   function handleModeClick(event: Event) {
     const button = event.currentTarget as HTMLButtonElement | null;
     const mode =
-      button?.dataset.playMode === "autocanonizer" ? "autocanonizer" : "jukebox";
+      button?.dataset.playMode === "autocanonizer"
+        ? "autocanonizer"
+        : "jukebox";
     setPlayMode(mode);
   }
 
@@ -1447,7 +1449,7 @@ export function bootstrap() {
       options,
       getCurrentTrackId(),
       tuningParams,
-      state.playMode
+      state.playMode,
     );
   }
 
@@ -1466,8 +1468,7 @@ export function bootstrap() {
       elements.topSongsList.innerHTML = "";
       for (const item of items.slice(0, TOP_SONGS_LIMIT)) {
         const title = typeof item.title === "string" ? item.title : "Untitled";
-        const artist =
-          typeof item.artist === "string" ? item.artist : "";
+        const artist = typeof item.artist === "string" ? item.artist : "";
         const youtubeId =
           typeof item.youtube_id === "string" ? item.youtube_id : "";
         const li = document.createElement("li");
@@ -1581,14 +1582,8 @@ export function bootstrap() {
       "is-hidden",
       mode === "autocanonizer",
     );
-    elements.infoButton.classList.toggle(
-      "is-hidden",
-      mode === "autocanonizer",
-    );
-    elements.beatsLabel.classList.toggle(
-      "is-hidden",
-      mode === "autocanonizer",
-    );
+    elements.infoButton.classList.toggle("is-hidden", mode === "autocanonizer");
+    elements.beatsLabel.classList.toggle("is-hidden", mode === "autocanonizer");
     elements.beatsPlayedEl.classList.toggle(
       "is-hidden",
       mode === "autocanonizer",
@@ -1602,9 +1597,7 @@ export function bootstrap() {
     if (state.trackTitle || state.trackArtist) {
       const baseTitle = state.trackTitle ?? "Unknown";
       const withSuffix =
-        mode === "autocanonizer"
-          ? `${baseTitle} (autocanonized)`
-          : baseTitle;
+        mode === "autocanonizer" ? `${baseTitle} (autocanonized)` : baseTitle;
       const displayTitle = state.trackArtist
         ? `${withSuffix} — ${state.trackArtist}`
         : withSuffix;
@@ -1616,7 +1609,13 @@ export function bootstrap() {
       if (currentId) {
         updateTrackUrl(currentId, true, state.tuningParams, state.playMode);
       } else {
-        navigateToTab("play", { replace: true }, null, state.tuningParams, state.playMode);
+        navigateToTab(
+          "play",
+          { replace: true },
+          null,
+          state.tuningParams,
+          state.playMode,
+        );
       }
     }
     updateVizVisibility(context);
