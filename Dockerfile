@@ -65,6 +65,10 @@ COPY engine/requirements.txt ./engine/
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --no-cache-dir Cython "numpy==1.26.4" && \
     pip install --no-cache-dir -r ./api/requirements.txt && \
+    # Ensure latest yt-dlp at build time even if cached requirements layer
+    pip install --no-cache-dir --upgrade "yt-dlp[default]" && \
+    # Install yt-dlp-ejs plugin for PO Token support (YouTube anti-bot bypass)
+    pip install --no-cache-dir yt-dlp-ejs && \
     # Critical: ensure Essentia is installed from a wheel (never source)
     pip install --no-cache-dir --no-build-isolation --only-binary=essentia -r ./engine/requirements.txt
 
@@ -108,6 +112,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libtag1v5 \
     libchromaprint1 \
     curl \
+    wget \
     unzip \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
@@ -117,6 +122,10 @@ ARG DENO_VERSION=2.6.5
 RUN curl -fsSL "https://github.com/denoland/deno/releases/download/v${DENO_VERSION}/deno-x86_64-unknown-linux-gnu.zip" \
     -o /tmp/deno.zip && unzip /tmp/deno.zip -d /usr/local/bin && rm /tmp/deno.zip && \
     deno --version
+
+# Install yt-dlp binary for best compatibility
+RUN wget https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -O /usr/local/bin/yt-dlp \
+    && chmod a+rx /usr/local/bin/yt-dlp
 
 WORKDIR /app
 
