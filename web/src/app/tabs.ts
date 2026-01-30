@@ -1,5 +1,6 @@
 import type { AppContext, TabId } from "./context";
 import { TOP_SONGS_REFRESH_MS } from "./constants";
+import { serializeParams } from "./tuning";
 
 export function pathForTab(tabId: TabId, youtubeId?: string | null) {
   if (tabId === "search") {
@@ -95,6 +96,6 @@ function buildSearchParams(
   } else {
     params.delete("mode");
   }
-  const search = params.toString();
+  const search = serializeParams(params);
   return search ? `?${search}` : "";
 }

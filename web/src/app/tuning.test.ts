@@ -75,7 +75,7 @@ describe("tuning params", () => {
     expect(config.currentThreshold).toBe(25);
     expect(config.minRandomBranchChance).toBeCloseTo(0.18, 4);
     expect(config.maxRandomBranchChance).toBeCloseTo(0.5, 4);
-    expect(config.randomBranchChanceDelta).toBeCloseTo(0.02, 4);
+    expect(config.randomBranchChanceDelta).toBeCloseTo(0.1, 4);
   });
 
   it("serializes only non-default tuning params", () => {
@@ -99,10 +99,11 @@ describe("tuning params", () => {
 
   it("writes and clears tuning params in the URL", () => {
     setWindowUrl("http://localhost/listen/abc?foo=bar&lb=0");
-    writeTuningParamsToUrl("jb=1&thresh=20", true);
+    writeTuningParamsToUrl("jb=1&thresh=20&bp=25,50,10", true);
     expect(window.location.search).toContain("foo=bar");
     expect(window.location.search).toContain("jb=1");
     expect(window.location.search).toContain("thresh=20");
+    expect(window.location.search).toContain("bp=25,50,10");
     expect(window.location.search).not.toContain("lb=0");
 
     clearTuningParamsFromUrl(true);
@@ -136,6 +137,6 @@ describe("tuning params", () => {
     const config = context.engine.getConfig();
     expect(config.minRandomBranchChance).toBeCloseTo(0.25, 4);
     expect(config.maxRandomBranchChance).toBeCloseTo(0.5, 4);
-    expect(config.randomBranchChanceDelta).toBeCloseTo(0.02, 4);
+    expect(config.randomBranchChanceDelta).toBeCloseTo(0.1, 4);
   });
 });
