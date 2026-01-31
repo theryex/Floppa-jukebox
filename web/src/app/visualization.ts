@@ -74,15 +74,17 @@ export function createVisualizations(vizLayer: HTMLElement) {
       const barsPerRow = Math.max(1, Math.ceil(Math.sqrt(totalBars)));
       const cols = Math.max(1, beatsPerBar * barsPerRow);
       const rows = Math.max(1, Math.ceil(count / cols));
-      const padding = 40;
-      const gridW = width - padding * 2;
-      const gridH = height - padding * 2;
+      const paddingX = 40;
+      const paddingTop = 64;
+      const paddingBottom = 80;
+      const gridW = width - paddingX * 2;
+      const gridH = height - paddingTop - paddingBottom;
       return Array.from({ length: count }, (_, i) => {
         const col = i % cols;
         const row = Math.floor(i / cols);
         return {
-          x: padding + (col / Math.max(1, cols - 1)) * gridW,
-          y: padding + (row / Math.max(1, rows - 1)) * gridH,
+          x: paddingX + (col / Math.max(1, cols - 1)) * gridW,
+          y: paddingTop + (row / Math.max(1, rows - 1)) * gridH,
         };
       });
     },
