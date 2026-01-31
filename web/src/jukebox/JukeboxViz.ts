@@ -644,21 +644,99 @@ function createVisualizations(
           beatsPerBar = 4;
         }
       }
-      const totalBars = Math.max(1, Math.ceil(count / Math.max(1, beatsPerBar)));
-      const barsPerRow = Math.max(1, Math.ceil(Math.sqrt(totalBars)));
-      const cols = Math.max(1, beatsPerBar * barsPerRow);
-      const rows = Math.max(1, Math.ceil(count / cols));
+      const bars: Array<{ bar: QuantumBase | null; section: QuantumBase | null }> = [];
+      const barIndex = new Map<QuantumBase, number>();
+      for (const beat of data.beats) {
+        const parent = beat.parent ?? null;
+        if (parent && !barIndex.has(parent)) {
+          barIndex.set(parent, bars.length);
+          bars.push({ bar: parent, section: parent.parent ?? null });
+        }
+      }
+      if (bars.length === 0) {
+        const totalBars = Math.max(
+          1,
+          Math.ceil(count / Math.max(1, beatsPerBar))
+        );
+        for (let i = 0; i < totalBars; i += 1) {
+          bars.push({ bar: null, section: null });
+        }
+      }
+      const totalBars = Math.max(1, bars.length);
+      const targetBarsPerRow = Math.max(1, Math.ceil(Math.sqrt(totalBars)));
+      const rowBars: number[] = [];
+      if (bars.some((entry) => entry.section)) {
+        let currentSection: QuantumBase | null = bars[0]?.section ?? null;
+        let sectionBars = 0;
+        const pushSectionRows = () => {
+          if (sectionBars <= 0) {
+            return;
+          }
+          let remaining = sectionBars;
+          while (remaining > 0) {
+            const chunk = Math.min(remaining, targetBarsPerRow);
+            rowBars.push(chunk);
+            remaining -= chunk;
+          }
+        };
+        for (const entry of bars) {
+          if (entry.section !== currentSection) {
+            pushSectionRows();
+            currentSection = entry.section;
+            sectionBars = 0;
+          }
+          sectionBars += 1;
+        }
+        pushSectionRows();
+      } else {
+        let remaining = totalBars;
+        while (remaining > 0) {
+          const chunk = Math.min(remaining, targetBarsPerRow);
+          rowBars.push(chunk);
+          remaining -= chunk;
+        }
+      }
+      const rows = Math.max(1, rowBars.length);
       const paddingX = 40;
       const paddingTop = 64;
       const paddingBottom = 80;
       const gridW = width - paddingX * 2;
       const gridH = height - paddingTop - paddingBottom;
+      const safeRatio = (index: number, max: number) =>
+        max <= 1 ? 0.5 : index / (max - 1);
+      const rowStartBar: number[] = [];
+      let running = 0;
+      for (const barsInRow of rowBars) {
+        rowStartBar.push(running);
+        running += barsInRow;
+      }
       return Array.from({ length: count }, (_, i) => {
-        const col = i % cols;
-        const row = Math.floor(i / cols);
+        const beat = data.beats[i];
+        const parent = beat.parent ?? null;
+        const barIdx = parent ? barIndex.get(parent) ?? 0 : Math.floor(i / beatsPerBar);
+        let rowIndex = 0;
+        for (let r = 0; r < rowBars.length; r += 1) {
+          const start = rowStartBar[r] ?? 0;
+          const end = start + rowBars[r];
+          if (barIdx >= start && barIdx < end) {
+            rowIndex = r;
+            break;
+          }
+        }
+        const barsInRow = rowBars[rowIndex] ?? 1;
+        const rowBarOffset = Math.max(0, barIdx - (rowStartBar[rowIndex] ?? 0));
+        let beatInBar = beat.indexInParent ?? -1;
+        if (beatInBar < 0 && parent?.children) {
+          beatInBar = parent.children.indexOf(beat);
+        }
+        if (beatInBar < 0) {
+          beatInBar = i % Math.max(1, beatsPerBar);
+        }
+        const cols = Math.max(1, beatsPerBar * barsInRow);
+        const col = Math.min(cols - 1, rowBarOffset * beatsPerBar + beatInBar);
         return {
-          x: paddingX + (col / Math.max(1, cols - 1)) * gridW,
-          y: paddingTop + (row / Math.max(1, rows - 1)) * gridH,
+          x: paddingX + safeRatio(col, cols) * gridW,
+          y: paddingTop + safeRatio(rowIndex, rows) * gridH,
         };
       });
     },
