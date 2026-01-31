@@ -11,6 +11,7 @@ plugins {
 android {
     namespace = "com.foreverjukebox.app"
     compileSdk = 36
+    ndkVersion = "29.0.14206865"
 
     val runNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
     val versionStamp = LocalDate.now(ZoneOffset.UTC).format(DateTimeFormatter.ofPattern("yyyy.MM"))
@@ -22,6 +23,12 @@ android {
         targetSdk = 36
         versionCode = runNumber
         versionName = ciVersionName
+
+        externalNativeBuild {
+            cmake {
+                arguments += listOf("-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON", "-DANDROID_STL=c++_shared")
+            }
+        }
     }
 
     buildTypes {
@@ -41,6 +48,7 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+        prefab = true
     }
 
     composeOptions {
@@ -50,6 +58,12 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+        }
     }
 
     packaging {
@@ -76,12 +90,15 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.4")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.4")
     implementation("androidx.media:media:1.7.0")
+    implementation("androidx.mediarouter:mediarouter:1.7.0")
 
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.6.3")
+    implementation("com.google.oboe:oboe:1.10.0")
+    implementation("com.google.android.gms:play-services-cast-framework:21.4.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling:1.6.8")
 }

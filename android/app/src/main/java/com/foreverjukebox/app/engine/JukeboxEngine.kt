@@ -7,6 +7,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
 import android.os.SystemClock
+import java.util.concurrent.CopyOnWriteArraySet
 import kotlin.math.min
 
 interface JukeboxPlayer {
@@ -23,7 +24,7 @@ class JukeboxEngine(
     private val player: JukeboxPlayer,
     options: JukeboxEngineOptions = JukeboxEngineOptions()
 ) {
-    private val scope = CoroutineScope(Dispatchers.Main)
+    private val scope = CoroutineScope(Dispatchers.Default)
     private var tickJob: Job? = null
     private var analysis: TrackAnalysis? = null
     private var graph: JukeboxGraphState? = null
@@ -42,7 +43,8 @@ class JukeboxEngine(
     private var ignoreResyncUntilMs: Long = 0
     private val deletedEdgeKeys = mutableSetOf<String>()
     private val rng = createRng(options.randomMode, options.seed)
-    private val listeners = mutableSetOf<(JukeboxState) -> Unit>()
+    private val listeners = CopyOnWriteArraySet<(JukeboxState) -> Unit>()
+    private val branchState = BranchState(0.0)
 
     init {
         config = config.copy(
@@ -93,6 +95,7 @@ class JukeboxEngine(
         config = config.copy(minLongBranch = current.beats.size / 5)
         graph = buildJumpGraph(current, config)
         curRandomBranchChance = config.minRandomBranchChance
+        branchState.curRandomBranchChance = curRandomBranchChance
         applyDeletedEdges()
     }
 
@@ -168,6 +171,7 @@ class JukeboxEngine(
         nextTransitionTime = 0.0
         beatsPlayed = 0
         curRandomBranchChance = config.minRandomBranchChance
+        branchState.curRandomBranchChance = curRandomBranchChance
         lastJumped = false
         lastJumpTime = null
         lastJumpFromIndex = null
@@ -216,11 +220,12 @@ class JukeboxEngine(
     private fun advanceBeat() {
         val currentGraph = graph ?: return
         val currentIndex = currentBeatIndex
+        val beatsCount = beats.size
         val nextIndex = currentIndex + 1
-        val wrappedIndex = if (nextIndex >= beats.size) 0 else nextIndex
+        val wrappedIndex = if (nextIndex >= beatsCount) 0 else nextIndex
         val enforceLastBranch = currentIndex == currentGraph.lastBranchPoint
         val seed = if (enforceLastBranch) beats[currentIndex] else beats[wrappedIndex]
-        val branchState = BranchState(curRandomBranchChance)
+        branchState.curRandomBranchChance = curRandomBranchChance
         val selection = selectNextBeatIndex(
             seed,
             currentGraph,
@@ -231,7 +236,7 @@ class JukeboxEngine(
         )
         curRandomBranchChance = branchState.curRandomBranchChance
         val chosenIndex = if (selection.second) selection.first else wrappedIndex
-        val wrappedToStart = wrappedIndex == 0 && currentIndex == beats.lastIndex
+        val wrappedToStart = wrappedIndex == 0 && currentIndex == beatsCount - 1
         if (selection.second || wrappedToStart) {
             val targetBeat = beats[chosenIndex]
             val unclampedOffset = targetBeat.duration * JUMP_OFFSET_FRACTION

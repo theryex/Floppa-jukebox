@@ -1,0 +1,16 @@
+import { describe, expect, it } from "vitest";
+import { formatDuration, formatTrackDuration } from "./format";
+
+describe("format", () => {
+  it("formats duration as hh:mm:ss", () => {
+    expect(formatDuration(0)).toBe("00:00:00");
+    expect(formatDuration(61)).toBe("00:01:01");
+    expect(formatDuration(3661)).toBe("01:01:01");
+  });
+
+  it("formats track duration with fallback", () => {
+    expect(formatTrackDuration("nope")).toBe("-");
+    expect(formatTrackDuration(NaN)).toBe("-");
+    expect(formatTrackDuration(1)).toBe("00:00:01");
+  });
+});

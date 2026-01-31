@@ -12,12 +12,13 @@ pip install -r requirements.txt
 
 ## Configure the generator
 
-Set environment variables to point at the generator repo and calibration bundle:
+Set environment variables to point at the generator repo (calibration optional):
 
 ```bash
-export GENERATOR_REPO=../engine
-export GENERATOR_CONFIG=../engine/calibration.json
+export ENGINE_REPO=../engine
 ```
+
+`ENGINE_CONFIG` is optional; set it only if you want a calibration bundle.
 
 Set API keys:
 
@@ -26,10 +27,20 @@ export SPOTIFY_CLIENT_ID=...
 export SPOTIFY_CLIENT_SECRET=...
 export YOUTUBE_API_KEY=...
 export ADMIN_KEY=...
+export NTFY_TOPIC_KEY=...
 export WORKER_COUNT=1
 export ALLOW_USER_UPLOAD=true
 export ALLOW_USER_YOUTUBE=true
 export ALLOW_FAVORITES_SYNC=true
+```
+
+### NTFY_TOPIC_KEY (optional)
+
+Set `NTFY_TOPIC_KEY` to enable ntfy alerts for YouTube download failures
+(HTTP 403 / “not a bot” challenge). The API will post to:
+
+```
+ntfy.sh/<NTFY_TOPIC_KEY>
 ```
 
 ## yt-dlp EJS runtime

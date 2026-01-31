@@ -17,8 +17,8 @@ APP_ROOT = Path(__file__).resolve().parents[1]
 STORAGE_ROOT = (APP_ROOT / "storage").resolve()
 DB_PATH = STORAGE_ROOT / "jobs.db"
 
-GENERATOR_REPO = Path(os.environ.get("GENERATOR_REPO", ""))
-GENERATOR_CONFIG = Path(os.environ.get("GENERATOR_CONFIG", ""))
+ENGINE_REPO = Path(os.environ.get("ENGINE_REPO", ""))
+ENGINE_CONFIG = Path(os.environ.get("ENGINE_CONFIG", "")) if os.environ.get("ENGINE_CONFIG") else None
 
 
 def _env_int(key: str, default: int) -> int:
@@ -44,12 +44,14 @@ class JobFailure(Exception):
 
 
 def run_job(job_id: str, input_path: str, output_path: str) -> None:
-    if not GENERATOR_REPO.exists() or not GENERATOR_CONFIG.exists():
-        raise RuntimeError("GENERATOR_REPO or GENERATOR_CONFIG is not set or missing")
+    if not ENGINE_REPO.exists():
+        raise RuntimeError("ENGINE_REPO is not set or missing")
+    if ENGINE_CONFIG and not ENGINE_CONFIG.exists():
+        raise RuntimeError("ENGINE_CONFIG is set but missing")
 
     env = os.environ.copy()
-    env["PYTHONPATH"] = str(GENERATOR_REPO)
-    env["FJ_PROGRESS"] = "1"
+    env["PYTHONPATH"] = str(ENGINE_REPO)
+    env["ENGINE_PROGRESS"] = "true"
 
     input_abs = abs_storage_path(STORAGE_ROOT, input_path)
     if not input_abs.exists():
@@ -69,8 +71,7 @@ def run_job(job_id: str, input_path: str, output_path: str) -> None:
         str(input_abs),
         "-o",
         str(output_abs),
-        "--calibration",
-        str(GENERATOR_CONFIG),
+        *(["--calibration", str(ENGINE_CONFIG)] if ENGINE_CONFIG else []),
     ]
 
     proc = subprocess.Popen(
@@ -79,7 +80,7 @@ def run_job(job_id: str, input_path: str, output_path: str) -> None:
         stderr=subprocess.STDOUT,
         text=True,
         env=env,
-        cwd=str(GENERATOR_REPO),
+        cwd=str(ENGINE_REPO),
         bufsize=1,
     )
     assert proc.stdout is not None

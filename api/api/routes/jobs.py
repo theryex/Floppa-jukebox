@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import subprocess
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -38,6 +39,73 @@ from ..models import (
 from ..paths import DB_PATH, STORAGE_ROOT
 from ..utils import abs_storage_path, get_logger
 from ..ytdlp_config import apply_ejs_config
+
+ERROR_ENGINE = "ERROR: [engine] Analysis engine encountered an issue."
+ERROR_YOUTUBE_UNAVAILABLE = "ERROR: [youtube] This video is not available."
+ERROR_DOWNLOAD_UNAVAILABLE = "ERROR: [download] This video is not available."
+ERROR_YOUTUBE_UNREACHABLE = "ERROR: [youtube] Unable to reach YouTube"
+ERROR_GENERIC = "ERROR: Something went wrong. Please try again or report an issue on GitHub."
+ERROR_CODE_ANALYSIS_MISSING = "analysis_missing"
+NTFY_TOPIC_ENV = "NTFY_TOPIC_KEY"
+
+
+def _normalize_job_error(raw: str | None) -> str:
+    if not raw:
+        return ERROR_GENERIC
+    lowered = raw.lower()
+    if "engine exited" in lowered:
+        return ERROR_ENGINE
+    if "video unavailable" in lowered or "this video is not available" in lowered:
+        return ERROR_YOUTUBE_UNAVAILABLE
+    if "http error 403" in lowered or "[download]" in lowered or "unable to download video data" in lowered:
+        return ERROR_DOWNLOAD_UNAVAILABLE
+    if "sign in to confirm" in lowered or "not a bot" in lowered:
+        return ERROR_YOUTUBE_UNREACHABLE
+    return ERROR_GENERIC
+
+
+def _error_code_for(raw: str | None) -> str | None:
+    if not raw:
+        return None
+    if raw == "Analysis missing":
+        return ERROR_CODE_ANALYSIS_MISSING
+    return None
+
+
+def _notify_youtube_issue(raw: str | None, youtube_id: str | None, job_id: str) -> None:
+    if not raw:
+        return
+    topic_key = os.environ.get(NTFY_TOPIC_ENV)
+    if not topic_key:
+        return
+    lowered = raw.lower()
+    issues: list[str] = []
+    if "http error 403" in lowered or "unable to download video data" in lowered:
+        issues.append("403: Forbidden")
+    if "sign in to confirm" in lowered or "not a bot" in lowered:
+        issues.append("Sign in to confirm you're not a bot")
+    if not issues:
+        return
+    video_label = youtube_id or "unknown"
+    log_path = f"/api/logs/{job_id}"
+    message = (
+        "[Forever Jukebox] Youtube error on "
+        + video_label
+        + ": "
+        + " or ".join(issues)
+        + " - "
+        + log_path
+    )
+    topic_url = f"ntfy.sh/{topic_key}"
+    try:
+        subprocess.run(
+            ["curl", "-d", message, topic_url],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        return
 
 router = APIRouter()
 logger = get_logger()
@@ -126,12 +194,22 @@ def _job_response(job) -> JSONResponse:
         return JSONResponse(payload.model_dump(), status_code=202)
 
     if job.status == "failed":
-        payload = JobError(status="failed", error=job.error, **base_payload)
+        payload = JobError(
+            status="failed",
+            error=_normalize_job_error(job.error),
+            error_code=_error_code_for(job.error),
+            **base_payload,
+        )
         return JSONResponse(payload.model_dump(), status_code=200)
 
     result_path = abs_storage_path(STORAGE_ROOT, job.output_path)
     if not result_path.exists():
-        payload = JobError(status="failed", error="Analysis missing", **base_payload)
+        payload = JobError(
+            status="failed",
+            error=_normalize_job_error("Analysis missing"),
+            error_code=_error_code_for("Analysis missing"),
+            **base_payload,
+        )
         return JSONResponse(payload.model_dump(), status_code=200)
 
     data = json.loads(result_path.read_text(encoding="utf-8"))
@@ -155,7 +233,8 @@ def _write_failure_log(job_id: str, message: str) -> None:
     log_path.write_text(f"Job failed: {message}\n", encoding="utf-8")
 
 
-def _cleanup_failure(job_id: str, message: str) -> None:
+def _cleanup_failure(job_id: str, message: str, youtube_id: str | None = None) -> None:
+    _notify_youtube_issue(message, youtube_id, job_id)
     _write_failure_log(job_id, message)
     for candidate in (STORAGE_ROOT / "audio").glob(f"{job_id}.*"):
         if candidate.is_file():
@@ -189,7 +268,7 @@ def _download_youtube_audio(job_id: str, youtube_id: str) -> None:
     try:
         from yt_dlp import YoutubeDL
     except Exception:
-        _cleanup_failure(job_id, "yt-dlp is not available")
+        _cleanup_failure(job_id, "yt-dlp is not available", youtube_id)
         return
 
     audio_dir = STORAGE_ROOT / "audio"
@@ -228,7 +307,7 @@ def _download_youtube_audio(job_id: str, youtube_id: str) -> None:
         with YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
     except Exception as exc:  # pragma: no cover - network call
-        _cleanup_failure(job_id, str(exc))
+        _cleanup_failure(job_id, str(exc), youtube_id)
         return
 
     job = get_job(DB_PATH, job_id)
@@ -258,7 +337,7 @@ def _download_youtube_audio(job_id: str, youtube_id: str) -> None:
                 break
 
     if not input_path:
-        _cleanup_failure(job_id, "Download failed")
+        _cleanup_failure(job_id, "Download failed", youtube_id)
         return
 
     input_path_obj = Path(input_path)

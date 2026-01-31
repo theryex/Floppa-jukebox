@@ -36,6 +36,8 @@ RUN python -m venv /opt/venv \
     && /opt/venv/bin/pip install --upgrade pip setuptools wheel \
     && /opt/venv/bin/pip install Cython "numpy==1.26.4" \
     && /opt/venv/bin/pip install -r /app/api/requirements.txt \
+    # Ensure latest yt-dlp at build time even if cached requirements layer
+    && /opt/venv/bin/pip install --upgrade "yt-dlp[default]" \
     # Critical: ensure Essentia is installed from a wheel (never source)
     && /opt/venv/bin/pip install --no-build-isolation --only-binary=essentia -r /app/engine/requirements.txt
 
@@ -56,8 +58,8 @@ RUN chmod +x /app/entrypoint.sh
 
 ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONPATH="/app/api" \
-    GENERATOR_REPO="/app/engine" \
-    GENERATOR_CONFIG="/app/engine/calibration.json"
+    ENGINE_REPO="/app/engine" \
+    NTFY_TOPIC_KEY=""
 
 EXPOSE 8000
 ENTRYPOINT ["/app/entrypoint.sh"]

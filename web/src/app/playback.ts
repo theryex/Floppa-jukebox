@@ -16,18 +16,26 @@ import {
   type AnalysisResponse,
 } from "./api";
 import { readCachedTrack, updateCachedTrack } from "./cache";
+import {
+  applyTuningParamsFromUrl,
+  clearTuningParamsFromUrl,
+  syncTuningParamsState,
+  writeTuningParamsToUrl,
+} from "./tuning";
+
+const DEFAULT_VOLUME = 0.5;
 
 export type PlaybackDeps = {
   setActiveTab: (tabId: "top" | "search" | "play" | "faq") => void;
   navigateToTab: (
     tabId: "top" | "search" | "play" | "faq",
-    options?: { replace?: boolean; youtubeId?: string | null }
+    options?: { replace?: boolean; youtubeId?: string | null },
   ) => void;
   updateTrackUrl: (youtubeId: string, replace?: boolean) => void;
   setAnalysisStatus: (message: string, spinning: boolean) => void;
   setLoadingProgress: (
     progress: number | null,
-    message?: string | null
+    message?: string | null,
   ) => void;
   onTrackChange?: (youtubeId: string | null) => void;
   onAnalysisLoaded?: (response: AnalysisComplete) => void;
@@ -45,7 +53,7 @@ export function updateListenTimeDisplay(context: AppContext) {
 function maybeUpdateDeleteEligibility(
   context: AppContext,
   response: AnalysisResponse | null,
-  jobIdOverride?: string | null
+  jobIdOverride?: string | null,
 ) {
   if (!response) {
     return;
@@ -56,8 +64,7 @@ function maybeUpdateDeleteEligibility(
     return;
   }
   let eligible = false;
-  const createdAt =
-    "created_at" in response ? response.created_at : undefined;
+  const createdAt = "created_at" in response ? response.created_at : undefined;
   if (typeof createdAt === "string") {
     const createdMs = Date.parse(createdAt);
     if (!Number.isNaN(createdMs)) {
@@ -91,13 +98,13 @@ export function updateTrackInfo(context: AppContext) {
   const branchCount = state.vizData
     ? state.vizData.edges.length
     : graph
-    ? graph.allEdges.filter((edge) => !edge.deleted).length
-    : 0;
+      ? graph.allEdges.filter((edge) => !edge.deleted).length
+      : 0;
   elements.infoBranchesEl.textContent = `${branchCount}`;
 }
 
 export function updateVizVisibility(context: AppContext) {
-  const { elements, visualizations, state } = context;
+  const { autocanonizer, elements, jukebox, state } = context;
   const hasTrack = Boolean(state.lastYouTubeId || state.lastJobId);
   if (state.audioLoaded && state.analysisLoaded) {
     elements.playStatusPanel.classList.add("hidden");
@@ -106,9 +113,13 @@ export function updateVizVisibility(context: AppContext) {
     elements.playButton.classList.remove("hidden");
     updatePlayButton(context, state.isRunning);
     elements.playTabButton.disabled = false;
-    visualizations[state.activeVizIndex]?.resizeNow();
+    if (state.playMode === "autocanonizer") {
+      autocanonizer.resizeNow();
+    } else {
+      jukebox.resizeActive();
+    }
     elements.vizButtons.forEach((button) => {
-      button.disabled = false;
+      button.disabled = state.playMode === "autocanonizer";
     });
   } else {
     elements.playStatusPanel.classList.remove("hidden");
@@ -141,7 +152,7 @@ export function closeInfo(context: AppContext) {
 }
 
 export function syncTuningUI(context: AppContext) {
-  const { elements, engine, state } = context;
+  const { elements, engine, player, state } = context;
   const config = engine.getConfig();
   const graph = engine.getGraphState();
   const thresholdValue =
@@ -159,6 +170,9 @@ export function syncTuningUI(context: AppContext) {
   elements.maxProbVal.textContent = `${maxProbPct}%`;
   elements.rampInput.value = `${rampPct}`;
   elements.rampVal.textContent = `${rampPct}%`;
+  const volumePct = Math.round(player.getVolume() * 100);
+  elements.volumeInput.value = `${volumePct}`;
+  elements.volumeVal.textContent = `${volumePct}`;
   elements.lastEdgeInput.checked = config.addLastEdge;
   elements.justBackwardsInput.checked = config.justBackwards;
   elements.justLongInput.checked = config.justLongBranches;
@@ -171,8 +185,13 @@ export function syncTuningUI(context: AppContext) {
 }
 
 export function applyTuningChanges(context: AppContext) {
-  const { elements, engine, state, visualizations } = context;
+  const { elements, engine, jukebox, state } = context;
   const threshold = Number(elements.thresholdInput.value);
+  const computed = Number(elements.computedThresholdEl.textContent);
+  const useAutoThreshold =
+    engine.getConfig().currentThreshold === 0 &&
+    Number.isFinite(computed) &&
+    threshold === computed;
   let minProb = Number(elements.minProbInput.value) / 100;
   let maxProb = Number(elements.maxProbInput.value) / 100;
   const ramp = Number(elements.rampInput.value) / 100;
@@ -184,7 +203,7 @@ export function applyTuningChanges(context: AppContext) {
     elements.maxProbVal.textContent = `${elements.maxProbInput.value}%`;
   }
   engine.updateConfig({
-    currentThreshold: threshold,
+    currentThreshold: useAutoThreshold ? 0 : threshold,
     minRandomBranchChance: minProb,
     maxRandomBranchChance: maxProb,
     randomBranchChanceDelta: ramp,
@@ -197,22 +216,50 @@ export function applyTuningChanges(context: AppContext) {
   state.vizData = engine.getVisualizationData();
   const data = state.vizData;
   if (data) {
-    visualizations.forEach((viz) => viz.setData(data));
+    jukebox.setData(data);
   }
   const graph = engine.getGraphState();
   updateTrackInfo(context);
-  elements.computedThresholdEl.textContent =
-    state.autoComputedThreshold === null
-      ? "-"
-      : `${state.autoComputedThreshold}`;
-  if (threshold === 0 && graph) {
+  if (graph) {
     const resolved = Math.max(0, Math.round(graph.currentThreshold));
-    state.autoComputedThreshold = resolved;
-    elements.thresholdInput.value = `${resolved}`;
-    elements.thresholdVal.textContent = elements.thresholdInput.value;
-    engine.updateConfig({ currentThreshold: resolved });
+    if (useAutoThreshold) {
+      state.autoComputedThreshold = resolved;
+    }
+    elements.computedThresholdEl.textContent = `${resolved}`;
+    if (useAutoThreshold) {
+      elements.thresholdInput.value = `${resolved}`;
+      elements.thresholdVal.textContent = elements.thresholdInput.value;
+    }
+  } else {
+    elements.computedThresholdEl.textContent =
+      state.autoComputedThreshold === null
+        ? "-"
+        : `${state.autoComputedThreshold}`;
   }
+  syncTuningParamsState(context);
+  writeTuningParamsToUrl(state.tuningParams, true);
   closeTuning(context);
+}
+
+export function resetTuningDefaults(context: AppContext) {
+  const { autocanonizer, engine, jukebox, state, player } = context;
+  engine.updateConfig(context.defaultConfig);
+  engine.rebuildGraph();
+  state.vizData = engine.getVisualizationData();
+  const data = state.vizData;
+  if (data) {
+    jukebox.setData(data);
+  }
+  const graph = engine.getGraphState();
+  state.autoComputedThreshold = graph
+    ? Math.round(graph.currentThreshold)
+    : null;
+  state.tuningParams = null;
+  writeTuningParamsToUrl(null, true);
+  player.setVolume(DEFAULT_VOLUME);
+  autocanonizer.setVolume(DEFAULT_VOLUME);
+  syncTuningUI(context);
+  updateTrackInfo(context);
 }
 
 export function startListenTimer(context: AppContext) {
@@ -235,7 +282,11 @@ export function stopListenTimer(context: AppContext) {
 }
 
 export function stopPlayback(context: AppContext) {
-  const { engine, state } = context;
+  const { autocanonizer, engine, player, state } = context;
+  if (state.playMode === "autocanonizer") {
+    autocanonizer.stop();
+    player.stop();
+  }
   engine.stopJukebox();
   if (state.lastPlayStamp !== null) {
     state.playTimerMs += performance.now() - state.lastPlayStamp;
@@ -248,9 +299,13 @@ export function stopPlayback(context: AppContext) {
 }
 
 export function togglePlayback(context: AppContext) {
-  const { engine, elements, visualizations, player, state } = context;
+  const { engine, elements, jukebox, player, state } = context;
   if (!state.isRunning) {
     try {
+      if (state.playMode === "autocanonizer") {
+        startAutocanonizerPlayback(context, 0);
+        return;
+      }
       if (player.getDuration() === null) {
         console.warn("Audio not loaded");
         return;
@@ -262,7 +317,7 @@ export function togglePlayback(context: AppContext) {
       updateListenTimeDisplay(context);
       elements.beatsPlayedEl.textContent = "0";
       state.lastBeatIndex = null;
-      visualizations[state.activeVizIndex]?.reset();
+      jukebox.reset();
       if (elements.vizStats) {
         elements.vizStats.classList.remove("pulse");
         void elements.vizStats.offsetWidth;
@@ -286,31 +341,68 @@ export function togglePlayback(context: AppContext) {
   }
 }
 
-function updatePlayButton(context: AppContext, isRunning: boolean) {
-  const label = isRunning ? "Stop" : "Play";
-  const icon =
-    context.elements.playButton.querySelector<HTMLSpanElement>(".play-icon");
-  const text =
-    context.elements.playButton.querySelector<HTMLSpanElement>(".play-text");
-  if (icon) {
-    icon.textContent = isRunning ? "stop" : "play_arrow";
+export function startAutocanonizerPlayback(context: AppContext, index: number) {
+  const { autocanonizer, engine, elements, player, state } = context;
+  if (!autocanonizer.isReady()) {
+    console.warn("Autocanonizer not ready");
+    return false;
   }
-  if (text) {
-    text.textContent = label;
+  player.stop();
+  engine.stopJukebox();
+  state.playTimerMs = 0;
+  state.lastPlayStamp = null;
+  updateListenTimeDisplay(context);
+  elements.beatsPlayedEl.textContent = "0";
+  state.lastBeatIndex = null;
+  if (elements.vizStats) {
+    elements.vizStats.classList.remove("pulse");
+    void elements.vizStats.offsetWidth;
+    elements.vizStats.classList.add("pulse");
   }
-  const shouldPulse = isRunning && context.state.activeTabId !== "play";
-  context.elements.playTabButton.classList.toggle("is-playing", shouldPulse);
-  context.elements.playButton.title = label;
-  context.elements.playButton.setAttribute("aria-label", label);
+  autocanonizer.resetVisualization();
+  autocanonizer.startAtIndex(index);
+  state.lastPlayStamp = performance.now();
+  state.isRunning = true;
+  startListenTimer(context);
+  updatePlayButton(context, true);
+  if (document.fullscreenElement) {
+    requestWakeLock(context);
+  }
+  return true;
 }
 
-export function resetForNewTrack(context: AppContext) {
-  const { elements, engine, visualizations, state, defaultConfig } = context;
+function updatePlayButton(context: AppContext, isRunning: boolean) {
+  const label = isRunning ? "Stop" : "Play";
+  const updateButton = (button: HTMLButtonElement) => {
+    const icon = button.querySelector<HTMLSpanElement>(".play-icon");
+    const text = button.querySelector<HTMLSpanElement>(".play-text");
+    if (icon) {
+      icon.textContent = isRunning ? "stop" : "play_arrow";
+    }
+    if (text) {
+      text.textContent = label;
+    }
+    button.title = label;
+    button.setAttribute("aria-label", label);
+  };
+  updateButton(context.elements.playButton);
+  updateButton(context.elements.vizPlayButton);
+  const shouldPulse = isRunning && context.state.activeTabId !== "play";
+  context.elements.playTabButton.classList.toggle("is-playing", shouldPulse);
+}
+
+export function resetForNewTrack(
+  context: AppContext,
+  options?: { clearTuning?: boolean },
+) {
+  const { autocanonizer, elements, engine, jukebox, state, defaultConfig } =
+    context;
+  const shouldClearTuning = options?.clearTuning ?? false;
   cancelPoll(context);
   state.shiftBranching = false;
   engine.setForceBranch(false);
   state.selectedEdge = null;
-  visualizations.forEach((viz) => viz.setSelectedEdge(null));
+  jukebox.setSelectedEdge(null);
   engine.clearDeletedEdges();
   state.audioLoaded = false;
   state.analysisLoaded = false;
@@ -334,7 +426,12 @@ export function resetForNewTrack(context: AppContext) {
   if (state.isRunning) {
     stopPlayback(context);
   }
+  autocanonizer.reset();
   state.autoComputedThreshold = null;
+  if (shouldClearTuning) {
+    state.tuningParams = null;
+    clearTuningParamsFromUrl(true);
+  }
   elements.computedThresholdEl.textContent = "-";
   engine.updateConfig({ ...defaultConfig });
   syncTuningUI(context);
@@ -348,17 +445,16 @@ export function resetForNewTrack(context: AppContext) {
   state.vizData = null;
   updateTrackInfo(context);
   const emptyVizData = { beats: [], edges: [] };
-  visualizations.forEach((viz) => {
-    viz.setData(emptyVizData);
-    viz.reset();
-  });
+  jukebox.setData(emptyVizData);
+  jukebox.reset();
 }
 
 export async function loadAudioFromJob(context: AppContext, jobId: string) {
-  const { player, state } = context;
+  const { autocanonizer, player, state } = context;
   try {
     const buffer = await fetchAudio(jobId);
     await player.decode(buffer);
+    autocanonizer.setAudio(player.getBuffer(), player.getContext());
     state.audioLoaded = true;
     state.audioLoadInFlight = false;
     updateVizVisibility(context);
@@ -385,19 +481,19 @@ export async function loadAudioFromJob(context: AppContext, jobId: string) {
 }
 
 function isAnalysisComplete(
-  response: AnalysisResponse | null
+  response: AnalysisResponse | null,
 ): response is AnalysisComplete {
   return response?.status === "complete";
 }
 
 function isAnalysisFailed(
-  response: AnalysisResponse | null
+  response: AnalysisResponse | null,
 ): response is AnalysisFailed {
   return response?.status === "failed";
 }
 
 function isAnalysisInProgress(
-  response: AnalysisResponse | null
+  response: AnalysisResponse | null,
 ): response is AnalysisInProgress {
   return (
     response?.status === "downloading" ||
@@ -409,25 +505,27 @@ function isAnalysisInProgress(
 export function applyAnalysisResult(
   context: AppContext,
   response: AnalysisComplete,
-  onAnalysisLoaded?: (response: AnalysisComplete) => void
+  onAnalysisLoaded?: (response: AnalysisComplete) => void,
 ): boolean {
   if (!response || response.status !== "complete" || !response.result) {
     return false;
   }
   maybeUpdateDeleteEligibility(context, response, response.id);
-  const { elements, engine, state, visualizations } = context;
+  const { autocanonizer, elements, engine, jukebox, state } = context;
+  applyTuningParamsFromUrl(context);
+  const useAutoThreshold = engine.getConfig().currentThreshold === 0;
   engine.loadAnalysis(response.result);
+  autocanonizer.setAnalysis(response.result, response.result.track?.duration);
   const graph = engine.getGraphState();
-  state.autoComputedThreshold = graph
-    ? Math.round(graph.currentThreshold)
-    : null;
+  state.autoComputedThreshold =
+    useAutoThreshold && graph ? Math.round(graph.currentThreshold) : null;
   state.vizData = engine.getVisualizationData();
   const data = state.vizData;
   if (data) {
-    visualizations.forEach((viz) => viz.setData(data));
+    jukebox.setData(data);
   }
   state.selectedEdge = null;
-  visualizations.forEach((viz) => viz.setSelectedEdge(null));
+  jukebox.setSelectedEdge(null);
   state.analysisLoaded = true;
   updateVizVisibility(context);
   const resultTrack = response.result.track ?? null;
@@ -441,9 +539,12 @@ export function applyAnalysisResult(
       ? track.duration
       : null;
   if (title || artist) {
-    const displayTitle = artist
-      ? `${title ?? "Unknown"} — ${artist}`
-      : `${title}`;
+    const baseTitle = title ?? "Unknown";
+    const withSuffix =
+      state.playMode === "autocanonizer"
+        ? `${baseTitle} (autocanonized)`
+        : baseTitle;
+    const displayTitle = artist ? `${withSuffix} — ${artist}` : withSuffix;
     elements.playTitle.textContent = displayTitle;
     elements.vizNowPlayingEl.textContent = displayTitle;
   } else {
@@ -478,7 +579,7 @@ async function recordPlayOnce(context: AppContext, jobId: string) {
 export async function pollAnalysis(
   context: AppContext,
   deps: PlaybackDeps,
-  jobId: string
+  jobId: string,
 ) {
   const { state } = context;
   const controller = new AbortController();
@@ -491,8 +592,10 @@ export async function pollAnalysis(
       }
       const response = await fetchAnalysis(jobId, controller.signal);
       if (!response) {
-        deps.setAnalysisStatus("Load failed. Try again.", false);
-        deps.navigateToTab("top", { replace: true });
+        deps.setAnalysisStatus(
+          "ERROR: Something went wrong. Please try again or report an issue on GitHub.",
+          false,
+        );
         return;
       }
       maybeUpdateDeleteEligibility(context, response, jobId);
@@ -509,16 +612,16 @@ export async function pollAnalysis(
           await loadAudioFromJob(context, jobId);
         }
       } else if (isAnalysisFailed(response)) {
-        if (response.error === "Analysis missing") {
+        if (response.error_code === "analysis_missing" && response.id) {
           try {
-            await repairJob(jobId);
+            await repairJob(response.id);
             continue;
           } catch (err) {
             console.warn(`Repair failed: ${String(err)}`);
           }
         }
-        deps.setAnalysisStatus("Loading failed.", false);
-        throw new Error(response.error || "Analysis failed");
+        deps.setAnalysisStatus(response.error || "Loading failed.", false);
+        return;
       } else if (isAnalysisComplete(response)) {
         if (!state.audioLoaded) {
           const audioLoaded = await loadAudioFromJob(context, jobId);
@@ -548,9 +651,11 @@ export async function pollAnalysis(
 export async function loadTrackByYouTubeId(
   context: AppContext,
   deps: PlaybackDeps,
-  youtubeId: string
+  youtubeId: string,
+  options?: { preserveUrlTuning?: boolean },
 ) {
-  resetForNewTrack(context);
+  const shouldClear = !options?.preserveUrlTuning;
+  resetForNewTrack(context, { clearTuning: shouldClear });
   deps.setActiveTab("play");
   deps.setLoadingProgress(null, "Fetching audio");
   context.state.lastYouTubeId = youtubeId;
@@ -559,8 +664,10 @@ export async function loadTrackByYouTubeId(
   try {
     const response = await fetchJobByYoutube(youtubeId);
     if (!response || !response.id) {
-      deps.setAnalysisStatus("Track unavailable. Try again.", false);
-      deps.navigateToTab("top", { replace: true });
+      deps.setAnalysisStatus(
+        "ERROR: Something went wrong. Please try again or report an issue on GitHub.",
+        false,
+      );
       return;
     }
     maybeUpdateDeleteEligibility(context, response, response.id);
@@ -585,7 +692,10 @@ export async function loadTrackByYouTubeId(
       await pollAnalysis(context, deps, response.id);
       return;
     }
-    deps.setAnalysisStatus("Track unavailable. Try again.", false);
+    deps.setAnalysisStatus(
+      "ERROR: Something went wrong. Please try again or report an issue on GitHub.",
+      false,
+    );
   } catch (err) {
     deps.setAnalysisStatus(`Load failed: ${String(err)}`, false);
   }
@@ -594,9 +704,11 @@ export async function loadTrackByYouTubeId(
 export async function loadTrackByJobId(
   context: AppContext,
   deps: PlaybackDeps,
-  jobId: string
+  jobId: string,
+  options?: { preserveUrlTuning?: boolean },
 ) {
-  resetForNewTrack(context);
+  const shouldClear = !options?.preserveUrlTuning;
+  resetForNewTrack(context, { clearTuning: shouldClear });
   deps.setActiveTab("play");
   deps.setLoadingProgress(null, "Fetching audio");
   context.state.lastJobId = jobId;
@@ -606,8 +718,10 @@ export async function loadTrackByJobId(
   try {
     const response = await fetchAnalysis(jobId);
     if (!response || !response.id) {
-      deps.setAnalysisStatus("Track unavailable. Try again.", false);
-      deps.navigateToTab("top", { replace: true });
+      deps.setAnalysisStatus(
+        "ERROR: Something went wrong. Please try again or report an issue on GitHub.",
+        false,
+      );
       return;
     }
     maybeUpdateDeleteEligibility(context, response, response.id);
@@ -631,7 +745,10 @@ export async function loadTrackByJobId(
       await pollAnalysis(context, deps, response.id);
       return;
     }
-    deps.setAnalysisStatus("Track unavailable. Try again.", false);
+    deps.setAnalysisStatus(
+      "ERROR: Something went wrong. Please try again or report an issue on GitHub.",
+      false,
+    );
   } catch (err) {
     deps.setAnalysisStatus(`Load failed: ${String(err)}`, false);
   }
@@ -689,16 +806,16 @@ export function delay(ms: number, signal?: AbortSignal) {
         window.clearTimeout(timer);
         resolve();
       },
-      { once: true }
+      { once: true },
     );
   });
 }
 
 export async function tryLoadCachedAudio(
   context: AppContext,
-  youtubeId: string
+  youtubeId: string,
 ) {
-  const { player, state } = context;
+  const { autocanonizer, player, state } = context;
   try {
     const cached = await readCachedTrack(youtubeId);
     if (!cached?.audio) {
@@ -706,6 +823,7 @@ export async function tryLoadCachedAudio(
     }
     state.lastJobId = cached.jobId ?? null;
     await player.decode(cached.audio);
+    autocanonizer.setAudio(player.getBuffer(), player.getContext());
     state.audioLoaded = true;
     state.audioLoadInFlight = false;
     updateVizVisibility(context);

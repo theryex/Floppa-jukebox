@@ -1,0 +1,142 @@
+import { describe, expect, it, beforeEach, vi } from "vitest";
+import type { AppContext } from "./context";
+import type { JukeboxConfig } from "../engine/types";
+import {
+  applyTuningParamsToEngine,
+  clearTuningParamsFromUrl,
+  getTuningParamsFromEngine,
+  syncTuningParamsState,
+  writeTuningParamsToUrl,
+} from "./tuning";
+import { setWindowUrl } from "./__tests__/test-utils";
+
+function createConfig(overrides: Partial<JukeboxConfig> = {}): JukeboxConfig {
+  return {
+    maxBranches: 4,
+    maxBranchThreshold: 80,
+    currentThreshold: 0,
+    addLastEdge: true,
+    justBackwards: false,
+    justLongBranches: false,
+    removeSequentialBranches: false,
+    minRandomBranchChance: 0.18,
+    maxRandomBranchChance: 0.5,
+    randomBranchChanceDelta: 0.1,
+    minLongBranch: 0,
+    ...overrides,
+  };
+}
+
+function createContext(
+  configOverrides: Partial<JukeboxConfig> = {},
+  defaultOverrides: Partial<JukeboxConfig> = {},
+): AppContext {
+  let config = createConfig(configOverrides);
+  const defaultConfig = createConfig(defaultOverrides);
+  const engine = {
+    getConfig: () => ({ ...config }),
+    updateConfig: (partial: Partial<JukeboxConfig>) => {
+      config = { ...config, ...partial };
+    },
+  };
+  return {
+    defaultConfig,
+    engine: engine as AppContext["engine"],
+    elements: {
+      canonizerFinish: { checked: false, addEventListener: vi.fn() },
+    } as unknown as AppContext["elements"],
+    player: {} as AppContext["player"],
+    autocanonizer: {} as AppContext["autocanonizer"],
+    jukebox: { refresh: vi.fn() } as unknown as AppContext["jukebox"],
+    state: {
+      tuningParams: null,
+      playMode: "jukebox",
+    } as unknown as AppContext["state"],
+  };
+}
+
+describe("tuning params", () => {
+  beforeEach(() => {
+    setWindowUrl("http://localhost/listen/abc");
+  });
+
+  it("applies legacy tuning params to engine config", () => {
+    const context = createContext();
+    const params = new URLSearchParams(
+      "lb=0&jb=1&lg=1&sq=0&thresh=25&bp=18,50,10",
+    );
+    const applied = applyTuningParamsToEngine(context, params);
+    expect(applied).toBe(true);
+    const config = context.engine.getConfig();
+    expect(config.addLastEdge).toBe(false);
+    expect(config.justBackwards).toBe(true);
+    expect(config.justLongBranches).toBe(true);
+    expect(config.removeSequentialBranches).toBe(true);
+    expect(config.currentThreshold).toBe(25);
+    expect(config.minRandomBranchChance).toBeCloseTo(0.18, 4);
+    expect(config.maxRandomBranchChance).toBeCloseTo(0.5, 4);
+    expect(config.randomBranchChanceDelta).toBeCloseTo(0.1, 4);
+  });
+
+  it("serializes only non-default tuning params", () => {
+    const context = createContext({
+      justBackwards: true,
+      currentThreshold: 30,
+    });
+    const params = getTuningParamsFromEngine(context);
+    expect(params.get("jb")).toBe("1");
+    expect(params.get("thresh")).toBe("30");
+    expect(params.get("lb")).toBeNull();
+    expect(params.get("bp")).toBeNull();
+  });
+
+  it("syncs tuning params state from engine config", () => {
+    const context = createContext({ justBackwards: true });
+    const result = syncTuningParamsState(context);
+    expect(result).toBe("jb=1");
+    expect(context.state.tuningParams).toBe("jb=1");
+  });
+
+  it("writes and clears tuning params in the URL", () => {
+    setWindowUrl("http://localhost/listen/abc?foo=bar&lb=0");
+    writeTuningParamsToUrl("jb=1&thresh=20&bp=25,50,10", true);
+    expect(window.location.search).toContain("foo=bar");
+    expect(window.location.search).toContain("jb=1");
+    expect(window.location.search).toContain("thresh=20");
+    expect(window.location.search).toContain("bp=25,50,10");
+    expect(window.location.search).not.toContain("lb=0");
+
+    clearTuningParamsFromUrl(true);
+    expect(window.location.search).toContain("foo=bar");
+    expect(window.location.search).not.toContain("jb=1");
+    expect(window.location.search).not.toContain("thresh=20");
+  });
+
+  it("ignores malformed bp values", () => {
+    const context = createContext();
+    const params = new URLSearchParams("bp=abc,def,ghi");
+    applyTuningParamsToEngine(context, params);
+    const config = context.engine.getConfig();
+    expect(config.minRandomBranchChance).toBeCloseTo(0.18, 4);
+    expect(config.maxRandomBranchChance).toBeCloseTo(0.5, 4);
+    expect(config.randomBranchChanceDelta).toBeCloseTo(0.1, 4);
+  });
+
+  it("ignores negative threshold values", () => {
+    const context = createContext();
+    const params = new URLSearchParams("thresh=-10");
+    applyTuningParamsToEngine(context, params);
+    const config = context.engine.getConfig();
+    expect(config.currentThreshold).toBe(0);
+  });
+
+  it("handles partially malformed bp values", () => {
+    const context = createContext();
+    const params = new URLSearchParams("bp=25,,10");
+    applyTuningParamsToEngine(context, params);
+    const config = context.engine.getConfig();
+    expect(config.minRandomBranchChance).toBeCloseTo(0.25, 4);
+    expect(config.maxRandomBranchChance).toBeCloseTo(0.5, 4);
+    expect(config.randomBranchChanceDelta).toBeCloseTo(0.1, 4);
+  });
+});

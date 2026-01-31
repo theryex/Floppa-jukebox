@@ -61,7 +61,7 @@
       <section class="panel tab-panel" data-tab-panel="top">
         <div class="subtabs" id="top-subtabs">
           <button class="subtab-btn active" data-top-subtab="top">
-            Top 20
+            Top Songs
           </button>
           <span class="subtab-spacer" aria-hidden="true"></span>
           <button class="subtab-btn" data-top-subtab="favorites">
@@ -69,7 +69,7 @@
           </button>
         </div>
         <div class="panel-title panel-title-row">
-          <span id="top-list-title">Top 20</span>
+          <span id="top-list-title">Top Songs</span>
           <div class="favorites-sync">
             <button
               id="favorites-sync-button"
@@ -248,10 +248,19 @@
         <div id="viz-panel" class="hidden">
           <div id="jukebox-viz" class="viz">
             <div id="viz-layer" class="viz-layer"></div>
+            <div id="canonizer-layer" class="canonizer-layer"></div>
             <div class="viz-top">
-              <div class="viz-actions"></div>
+              <div class="viz-actions">
+                <span class="viz-label">Mode:</span>
+                <button class="viz-btn active" data-play-mode="jukebox">
+                  Jukebox
+                </button>
+                <button class="viz-btn" data-play-mode="autocanonizer">
+                  Autocanonizer
+                </button>
+              </div>
               <div class="viz-controls">
-                <span>Visualization:</span>
+                <span class="viz-label">Visualization:</span>
                 <button class="viz-btn active" data-viz="0">1</button>
                 <button class="viz-btn" data-viz="1">2</button>
                 <button class="viz-btn" data-viz="2">3</button>
@@ -259,18 +268,36 @@
                 <button class="viz-btn" data-viz="4">5</button>
                 <button class="viz-btn" data-viz="5">6</button>
               </div>
+              <div class="canonizer-finish">
+                <input type="checkbox" id="canonizer-finish" />
+                <span>Finish out the song</span>
+              </div>
             </div>
             <div class="viz-bottom" id="viz-stats">
-              <div class="viz-info">
-                <div class="viz-title" id="viz-now-playing">
-                  The Forever Jukebox
-                </div>
-                <div class="viz-meta">
-                  <span>Listen Time:</span>
-                  <span id="listen-time">00:00:00</span>
-                  <span class="viz-divider">·</span>
-                  <span>Total Beats:</span>
-                  <span id="beats-played">0</span>
+              <div class="viz-bottom-left">
+                <button
+                  id="viz-play"
+                  class="play-toggle viz-play-toggle"
+                  aria-label="Play"
+                >
+                  <span
+                    class="material-symbols-outlined play-icon"
+                    aria-hidden="true"
+                    >play_arrow</span
+                  >
+                  <span class="play-text">Play</span>
+                </button>
+                <div class="viz-info">
+                  <div class="viz-title" id="viz-now-playing">
+                    The Forever Jukebox
+                  </div>
+                  <div class="viz-meta">
+                    <span>Listen Time:</span>
+                    <span id="listen-time">00:00:00</span>
+                    <span id="viz-beats-divider" class="viz-divider">·</span>
+                    <span id="viz-beats-label">Total Beats:</span>
+                    <span id="beats-played">0</span>
+                  </div>
                 </div>
               </div>
               <button
@@ -432,6 +459,17 @@
                 value="10"
               />
             </label>
+            <label>
+              Volume: <span id="volume-val">50</span>
+              <input
+                id="volume"
+                type="range"
+                min="0"
+                max="100"
+                step="5"
+                value="50"
+              />
+            </label>
             <div class="checkbox-row">
               <label
                 ><input id="last-edge" type="checkbox" checked /> Loop extension
@@ -451,7 +489,8 @@
               >
             </div>
           </div>
-          <div class="modal-footer">
+          <div class="modal-footer tuning-footer">
+            <button id="tuning-reset">Reset</button>
             <button id="tuning-apply">Apply</button>
           </div>
         </div>
@@ -567,7 +606,7 @@
         <p>
           The Forever Jukebox &amp; Analysis Engine by
           <a href="https://creighton.dev" target="_blank" rel="noreferrer"
-            >Creighton Linza</a
+            >Creighton</a
           >. Based off of
           <a href="https://musicmachinery.com/" target="_blank" rel="noreferrer"
             >Paul Lamere</a

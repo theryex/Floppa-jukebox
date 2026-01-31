@@ -11,6 +11,14 @@ export function getElements() {
     document.querySelector<HTMLSpanElement>("#beats-played"),
     "#beats-played"
   );
+  const beatsLabel = requireElement(
+    document.querySelector<HTMLSpanElement>("#viz-beats-label"),
+    "#viz-beats-label"
+  );
+  const beatsDivider = requireElement(
+    document.querySelector<HTMLSpanElement>("#viz-beats-divider"),
+    "#viz-beats-divider"
+  );
   const vizNowPlayingEl = requireElement(
     document.querySelector<HTMLDivElement>("#viz-now-playing"),
     "#viz-now-playing"
@@ -23,9 +31,25 @@ export function getElements() {
     document.querySelector<HTMLDivElement>("#viz-layer"),
     "#viz-layer"
   );
+  const canonizerLayer = requireElement(
+    document.querySelector<HTMLDivElement>("#canonizer-layer"),
+    "#canonizer-layer"
+  );
+  const canonizerFinish = requireElement(
+    document.querySelector<HTMLInputElement>("#canonizer-finish"),
+    "#canonizer-finish"
+  );
+  const jukeboxViz = requireElement(
+    document.querySelector<HTMLDivElement>("#jukebox-viz"),
+    "#jukebox-viz"
+  );
   const vizButtons = requireNonEmpty(
     Array.from(document.querySelectorAll<HTMLButtonElement>("[data-viz]")),
     "[data-viz]"
+  );
+  const playModeButtons = requireNonEmpty(
+    Array.from(document.querySelectorAll<HTMLButtonElement>("[data-play-mode]")),
+    "[data-play-mode]"
   );
   const playStatusPanel = requireElement(
     document.querySelector<HTMLDivElement>("#play-status"),
@@ -62,6 +86,10 @@ export function getElements() {
   const playButton = requireElement(
     document.querySelector<HTMLButtonElement>("#play"),
     "#play"
+  );
+  const vizPlayButton = requireElement(
+    document.querySelector<HTMLButtonElement>("#viz-play"),
+    "#viz-play"
   );
   const shortUrlButton = requireElement(
     document.querySelector<HTMLButtonElement>("#short-url"),
@@ -114,6 +142,10 @@ export function getElements() {
   const tuningApply = requireElement(
     document.querySelector<HTMLButtonElement>("#tuning-apply"),
     "#tuning-apply"
+  );
+  const tuningReset = requireElement(
+    document.querySelector<HTMLButtonElement>("#tuning-reset"),
+    "#tuning-reset"
   );
   const infoDurationEl = requireElement(
     document.querySelector<HTMLSpanElement>("#info-duration"),
@@ -208,6 +240,14 @@ export function getElements() {
   const rampVal = requireElement(
     document.querySelector<HTMLSpanElement>("#ramp-val"),
     "#ramp-val"
+  );
+  const volumeInput = requireElement(
+    document.querySelector<HTMLInputElement>("#volume"),
+    "#volume"
+  );
+  const volumeVal = requireElement(
+    document.querySelector<HTMLSpanElement>("#volume-val"),
+    "#volume-val"
   );
   const lastEdgeInput = requireElement(
     document.querySelector<HTMLInputElement>("#last-edge"),
@@ -334,10 +374,16 @@ export function getElements() {
   return {
     listenTimeEl,
     beatsPlayedEl,
+    beatsLabel,
+    beatsDivider,
     vizNowPlayingEl,
     vizPanel,
     vizLayer,
+    canonizerLayer,
+    canonizerFinish,
+    jukeboxViz,
     vizButtons,
+    playModeButtons,
     playStatusPanel,
     playMenu,
     tabButtons,
@@ -347,6 +393,7 @@ export function getElements() {
     analysisSpinner,
     analysisProgress,
     playButton,
+    vizPlayButton,
     shortUrlButton,
     tuningButton,
     infoButton,
@@ -360,6 +407,7 @@ export function getElements() {
     tuningClose,
     infoClose,
     tuningApply,
+    tuningReset,
     favoritesSyncEnterModal,
     favoritesSyncEnterClose,
     favoritesSyncEnterInput,
@@ -383,6 +431,8 @@ export function getElements() {
     maxProbVal,
     rampInput,
     rampVal,
+    volumeInput,
+    volumeVal,
     lastEdgeInput,
     justBackwardsInput,
     justLongInput,

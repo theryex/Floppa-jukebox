@@ -10,6 +10,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.File
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
@@ -69,7 +70,7 @@ class ApiClient(private val json: Json = Json { ignoreUnknownKeys = true }) {
         return getJson(url)
     }
 
-    suspend fun fetchTopSongs(baseUrl: String, limit: Int = 20): List<TopSongItem> {
+    suspend fun fetchTopSongs(baseUrl: String, limit: Int = 25): List<TopSongItem> {
         val url = buildUrl(baseUrl, ApiPaths.TOP) {
             addQueryParameter("limit", limit.toString())
         }
@@ -112,9 +113,9 @@ class ApiClient(private val json: Json = Json { ignoreUnknownKeys = true }) {
         postEmpty(url)
     }
 
-    suspend fun fetchAudioBytes(baseUrl: String, jobId: String): ByteArray {
+    suspend fun fetchAudioToFile(baseUrl: String, jobId: String, target: File): File {
         val url = buildUrl(baseUrl, ApiPaths.audio(jobId))
-        return getBytes(url)
+        return getToFile(url, target)
     }
 
     suspend fun repairJob(baseUrl: String, jobId: String): AnalysisResponse {
@@ -137,13 +138,24 @@ class ApiClient(private val json: Json = Json { ignoreUnknownKeys = true }) {
         }
     }
 
-    private suspend fun getBytes(url: String): ByteArray = withContext(Dispatchers.IO) {
+    private suspend fun getToFile(url: String, target: File): File = withContext(Dispatchers.IO) {
         val request = Request.Builder().url(url).get().build()
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
                 throw IOException("HTTP ${response.code}")
             }
-            response.body?.bytes() ?: ByteArray(0)
+            val body = response.body ?: throw IOException("Empty response body")
+            target.outputStream().use { output ->
+                body.byteStream().use { input ->
+                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read <= 0) break
+                        output.write(buffer, 0, read)
+                    }
+                }
+            }
+            target
         }
     }
 
