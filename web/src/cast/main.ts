@@ -20,6 +20,9 @@ type CastStatus = {
   title: string | null;
   artist: string | null;
   isPlaying: boolean;
+  isLoading: boolean;
+  error?: string | null;
+  playbackState: "idle" | "loading" | "playing" | "paused" | "error";
 };
 
 type CastLoadRequest = {
@@ -280,6 +283,37 @@ async function bootstrap() {
     trackTitle: null,
     trackArtist: null,
   };
+  let lastCastSenderId: string | null = null;
+
+  function sendStatusUpdate(senderId?: string, error?: string | null) {
+    if (!castContext || !player) {
+      return;
+    }
+    const target = senderId || lastCastSenderId || "*";
+    const isLoading = state.loadToken > 0 && !!state.currentTrackId && !state.vizData;
+    const hasTrack = !!state.currentTrackId;
+    const isPlaying = player.isPlaying();
+    const playbackState = error
+      ? "error"
+      : !hasTrack
+          ? "idle"
+          : isLoading
+              ? "loading"
+              : isPlaying
+                  ? "playing"
+                  : "paused";
+    const status: CastStatus = {
+      type: "status",
+      songId: state.currentTrackId,
+      title: state.trackTitle,
+      artist: state.trackArtist,
+      isPlaying,
+      isLoading,
+      error: error ?? null,
+      playbackState,
+    };
+    castContext.sendCustomMessage(castNamespace, target, status);
+  }
 
   function clearIdleStopTimer() {
     if (idleStopTimer !== null) {
@@ -394,6 +428,7 @@ async function bootstrap() {
     state.currentTrackId = trackId;
     state.loadToken += 1;
     const token = state.loadToken;
+    sendStatusUpdate();
     setLoadingState(elements, true);
     setStatus(elements.status, "Loading…");
     elements.listenTime.textContent = "00:00:00";
@@ -459,10 +494,12 @@ async function bootstrap() {
       engine.play();
       playStartAtMs = performance.now();
       clearIdleStopTimer();
+      sendStatusUpdate();
     } catch (err) {
       if (token !== state.loadToken) {
         return;
       }
+      const errorMessage = err instanceof Error ? err.message : "Load failed";
       state.currentTrackId = null;
       state.lastBeatIndex = null;
       state.vizData = null;
@@ -486,10 +523,14 @@ async function bootstrap() {
       setLogoVisible(elements, true);
       startIdleKeepAlive();
       scheduleIdleStop();
+      sendStatusUpdate(undefined, errorMessage);
     }
   }
 
   function handleCastCommand(command: CastCommand, senderId?: string) {
+    if (senderId) {
+      lastCastSenderId = senderId;
+    }
     if (!engine || !player) {
       return;
     }
@@ -510,6 +551,7 @@ async function bootstrap() {
       engine.play();
       playStartAtMs = performance.now();
       clearIdleStopTimer();
+      sendStatusUpdate(senderId);
       return;
     }
     if (command.type === "stop") {
@@ -526,17 +568,11 @@ async function bootstrap() {
       setLogoVisible(elements, false);
       startIdleKeepAlive();
       scheduleIdleStop();
+      sendStatusUpdate(senderId);
       return;
     }
     if (command.type === "getStatus" && castContext) {
-      const status: CastStatus = {
-        type: "status",
-        songId: state.currentTrackId,
-        title: state.trackTitle,
-        artist: state.trackArtist,
-        isPlaying: player.isPlaying(),
-      };
-      castContext.sendCustomMessage(castNamespace, senderId || "*", status);
+      sendStatusUpdate(senderId);
     }
   }
 
@@ -577,6 +613,9 @@ async function bootstrap() {
         return;
       }
       try {
+        if (event?.senderId) {
+          lastCastSenderId = event.senderId;
+        }
         const command =
           typeof payload === "string"
             ? (JSON.parse(payload) as CastCommand)
