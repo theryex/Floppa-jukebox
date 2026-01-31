@@ -237,7 +237,7 @@ async function loadAudio(
 
 async function bootstrap() {
   const elements = getElements();
-  const IDLE_TIMEOUT_MS = 120_000;
+  const IDLE_TIMEOUT_MS = 300_000;
   const IDLE_KEEPALIVE_MS = 25_000;
   let player: BufferedAudioPlayer | null = null;
   let engine: JukeboxEngine | null = null;
@@ -369,7 +369,7 @@ async function bootstrap() {
     }
     const elapsed = Math.max(0, performance.now() - playStartAtMs);
     elements.listenTime.textContent = formatDuration(elapsed / 1000);
-  }, 200);
+  }, 500);
 
   async function startTrack(trackId: string) {
     clearIdleStopTimer();
@@ -403,11 +403,11 @@ async function bootstrap() {
     state.vizData = null;
     state.trackTitle = null;
     state.trackArtist = null;
-      if (viz) {
-        viz.reset();
-        viz.setVisible(false);
-      }
-      await resetEngine();
+    if (viz) {
+      viz.reset();
+      viz.setVisible(false);
+    }
+    await resetEngine();
     if (token !== state.loadToken) {
       return;
     }

@@ -40,9 +40,11 @@ class CanvasViz {
   private baseCtx: CanvasRenderingContext2D;
   private overlayCtx: CanvasRenderingContext2D;
 
+  private size = { width: 0, height: 0 };
   private data: VisualizationData | null = null;
   private positions: Array<{ x: number; y: number }> = [];
   private center = { x: 0, y: 0 };
+  private bendCache = new Map<string, boolean>();
 
   private currentIndex = -1;
   private jumpLine: JumpLine | null = null;
@@ -63,6 +65,7 @@ class CanvasViz {
     beatFill: "rgba(255, 215, 130, 0.55)",
     edgeSelected: "#ff5b5b",
     beatHighlight: "#ffd46a",
+    beatHighlightRgb: null as { r: number; g: number; b: number } | null,
   };
 
   constructor(
@@ -144,6 +147,7 @@ class CanvasViz {
     this.data = null;
     this.positions = [];
     this.edgeGeometry = new WeakMap();
+    this.bendCache.clear();
   }
 
   setOnSelect(handler: (index: number) => void) {
@@ -180,6 +184,7 @@ class CanvasViz {
       return;
     }
     const dpr = window.devicePixelRatio || 1;
+    this.size = { width: rect.width, height: rect.height };
     this.baseCanvas.width = rect.width * dpr;
     this.baseCanvas.height = rect.height * dpr;
     this.overlayCanvas.width = rect.width * dpr;
@@ -198,9 +203,10 @@ class CanvasViz {
     if (!this.data) {
       return;
     }
-    const { width, height } = this.container.getBoundingClientRect();
+    const { width, height } = this.size;
     this.positions = this.positioner(this.data.beats.length, width, height);
     this.center = { x: width / 2, y: height / 2 };
+    this.bendCache.clear();
   }
 
   private computeEdgeGeometry() {
@@ -217,7 +223,7 @@ class CanvasViz {
       if (!from || !to) {
         continue;
       }
-      const bend = this.shouldBendEdge(from, to);
+      const bend = this.shouldBendEdge(from, to, edge.src.which, edge.dest.which);
       const control = bend ? this.getBendControlPoint(from, to) : null;
       this.edgeGeometry.set(edge, { bend, control });
     }
@@ -235,13 +241,46 @@ class CanvasViz {
     this.theme.beatHighlight =
       styles.getPropertyValue("--beat-highlight").trim() ||
       this.theme.beatHighlight;
+    this.theme.beatHighlightRgb = this.parseThemeColor(this.theme.beatHighlight);
+  }
+
+  private parseThemeColor(color: string) {
+    const value = color.trim();
+    if (value.startsWith("#")) {
+      const hex = value.slice(1);
+      const normalized =
+        hex.length === 3
+          ? hex
+              .split("")
+              .map((ch) => ch + ch)
+              .join("")
+          : hex.slice(0, 6);
+      const r = Number.parseInt(normalized.slice(0, 2), 16);
+      const g = Number.parseInt(normalized.slice(2, 4), 16);
+      const b = Number.parseInt(normalized.slice(4, 6), 16);
+      if (
+        Number.isFinite(r) &&
+        Number.isFinite(g) &&
+        Number.isFinite(b)
+      ) {
+        return { r, g, b };
+      }
+    }
+    const match = value.match(/rgba?\(([^)]+)\)/i);
+    if (match) {
+      const parts = match[1].split(",").map((val) => Number.parseFloat(val));
+      if (parts.length >= 3 && parts.every((val) => Number.isFinite(val))) {
+        return { r: parts[0], g: parts[1], b: parts[2] };
+      }
+    }
+    return null;
   }
 
   private drawBase() {
     if (!this.data || !this.visible) {
       return;
     }
-    const { width, height } = this.container.getBoundingClientRect();
+    const { width, height } = this.size;
     this.baseCtx.clearRect(0, 0, width, height);
     this.baseCtx.save();
     this.baseCtx.lineWidth = 1;
@@ -252,12 +291,34 @@ class CanvasViz {
         ? Math.ceil(edges.length / MAX_EDGES_BASE)
         : 1;
 
+    this.baseCtx.strokeStyle = this.theme.edgeStroke;
     for (let i = 0; i < edges.length; i += step) {
       const edge = edges[i];
       if (edge.deleted) {
         continue;
       }
-      this.drawEdge(this.baseCtx, edge, this.theme.edgeStroke, 1);
+      const from = this.positions[edge.src.which];
+      const to = this.positions[edge.dest.which];
+      if (!from || !to) {
+        continue;
+      }
+      const geometry = this.getEdgeGeometry(edge);
+      if (geometry?.bend && geometry.control) {
+        this.baseCtx.beginPath();
+        this.baseCtx.moveTo(from.x, from.y);
+        this.baseCtx.quadraticCurveTo(
+          geometry.control[0],
+          geometry.control[1],
+          to.x,
+          to.y
+        );
+        this.baseCtx.stroke();
+      } else {
+        this.baseCtx.beginPath();
+        this.baseCtx.moveTo(from.x, from.y);
+        this.baseCtx.lineTo(to.x, to.y);
+        this.baseCtx.stroke();
+      }
     }
 
     this.baseCtx.fillStyle = this.theme.beatFill;
@@ -271,7 +332,7 @@ class CanvasViz {
   }
 
   private drawOverlay() {
-    const { width, height } = this.container.getBoundingClientRect();
+    const { width, height } = this.size;
     this.overlayCtx.clearRect(0, 0, width, height);
     if (!this.data || !this.visible) {
       return;
@@ -302,7 +363,7 @@ class CanvasViz {
         if (from && to) {
           const alpha = 1 - age / 1000;
           const jumpColor = this.resolveBeatJumpColor(alpha);
-          if (this.shouldBendEdge(from, to)) {
+          if (this.shouldBendEdge(from, to, this.jumpLine.from, this.jumpLine.to)) {
             this.drawBentLine(this.overlayCtx, from, to, jumpColor, 2);
           } else {
             this.overlayCtx.strokeStyle = jumpColor;
@@ -320,29 +381,11 @@ class CanvasViz {
   }
 
   private resolveBeatJumpColor(alpha: number) {
-    const color = this.theme.beatHighlight.trim();
-    if (color.startsWith("#")) {
-      const hex = color.slice(1);
-      const normalized =
-        hex.length === 3
-          ? hex
-              .split("")
-              .map((ch) => ch + ch)
-              .join("")
-          : hex.slice(0, 6);
-      const r = Number.parseInt(normalized.slice(0, 2), 16);
-      const g = Number.parseInt(normalized.slice(2, 4), 16);
-      const b = Number.parseInt(normalized.slice(4, 6), 16);
+    if (this.theme.beatHighlightRgb) {
+      const { r, g, b } = this.theme.beatHighlightRgb;
       return `rgba(${r}, ${g}, ${b}, ${alpha})`;
     }
-    const match = color.match(/rgba?\(([^)]+)\)/i);
-    if (match) {
-      const parts = match[1].split(",").map((value) => Number.parseFloat(value));
-      if (parts.length >= 3 && parts.every((value) => Number.isFinite(value))) {
-        return `rgba(${parts[0]}, ${parts[1]}, ${parts[2]}, ${alpha})`;
-      }
-    }
-    return color;
+    return this.theme.beatHighlight;
   }
 
   private handleCanvasClick = (event: MouseEvent) => {
@@ -448,14 +491,35 @@ class CanvasViz {
     if (!from || !to) {
       return null;
     }
-    const bend = this.shouldBendEdge(from, to);
+    const bend = this.shouldBendEdge(from, to, edge.src.which, edge.dest.which);
     const control = bend ? this.getBendControlPoint(from, to) : null;
     const next = { bend, control };
     this.edgeGeometry.set(edge, next);
     return next;
   }
 
-  private shouldBendEdge(from: { x: number; y: number }, to: { x: number; y: number }) {
+  private shouldBendEdge(
+    from: { x: number; y: number },
+    to: { x: number; y: number },
+    fromIndex?: number,
+    toIndex?: number
+  ) {
+    if (fromIndex !== undefined && toIndex !== undefined) {
+      const min = Math.min(fromIndex, toIndex);
+      const max = Math.max(fromIndex, toIndex);
+      const key = `${min}:${max}`;
+      const cached = this.bendCache.get(key);
+      if (cached !== undefined) {
+        return cached;
+      }
+      const computed = this.computeShouldBend(from, to);
+      this.bendCache.set(key, computed);
+      return computed;
+    }
+    return this.computeShouldBend(from, to);
+  }
+
+  private computeShouldBend(from: { x: number; y: number }, to: { x: number; y: number }) {
     const step = Math.max(1, Math.ceil(this.positions.length / MAX_EDGE_SAMPLES));
     for (let i = 0; i < this.positions.length; i += step) {
       const p = this.positions[i];
