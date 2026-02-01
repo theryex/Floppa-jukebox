@@ -2,6 +2,10 @@
   box-sizing: border-box;
 }
 
+.hidden {
+  display: none !important;
+}
+
 html,
 body {
   margin: 0;
@@ -59,10 +63,6 @@ body {
   object-fit: contain;
 }
 
-#cast-logo.hidden {
-  display: none;
-}
-
 #viz-panel {
   position: absolute;
   inset: 0;
@@ -90,10 +90,6 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(10px);
   z-index: 3;
-}
-
-#cast-bottom.hidden {
-  display: none;
 }
 
 .cast-info {

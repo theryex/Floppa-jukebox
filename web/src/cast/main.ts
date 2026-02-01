@@ -143,6 +143,7 @@ function setLoadingState(elements: CastElements, isLoading: boolean) {
 function setLogoVisible(elements: CastElements, isVisible: boolean) {
   elements.logo.classList.toggle("hidden", !isVisible);
   elements.bottomBar.classList.toggle("hidden", isVisible);
+  elements.vizPanel.classList.toggle("hidden", isVisible);
 }
 
 function setIdleState(elements: CastElements) {
