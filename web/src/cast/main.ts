@@ -1,6 +1,7 @@
 import "../cast/style.css";
 import { BufferedAudioPlayer } from "../audio/BufferedAudioPlayer";
 import { JukeboxEngine } from "../engine";
+import type { JukeboxConfig } from "../engine/types";
 import { JukeboxViz } from "../jukebox/JukeboxViz";
 import { fetchAnalysis, fetchAudio, fetchJobByYoutube } from "../app/api";
 import { formatDuration } from "../app/format";
@@ -8,6 +9,7 @@ import { formatDuration } from "../app/format";
 type CastCustomData = {
   baseUrl?: string;
   songId?: string;
+  tuningParams?: string;
 };
 
 type CastCommand = {
@@ -116,6 +118,85 @@ function getElements(): CastElements {
 
 function isLikelyYoutubeId(value: string) {
   return /^[a-zA-Z0-9_-]{11}$/.test(value);
+}
+
+const MIN_RANDOM_BRANCH_DELTA = 0;
+const MAX_RANDOM_BRANCH_DELTA = 1;
+const TUNING_PARAM_KEYS = ["lb", "jb", "lg", "sq", "thresh", "bp", "d"];
+
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function mapPercentToRange(percent: number, min: number, max: number) {
+  const safePercent = clamp(percent, 0, 100);
+  return ((max - min) * safePercent) / 100 + min;
+}
+
+function parseDeletedEdgeIds(raw: string | null): number[] {
+  if (!raw) {
+    return [];
+  }
+  return raw
+    .split(",")
+    .map((value) => Number.parseInt(value, 10))
+    .filter((value) => Number.isFinite(value) && value >= 0);
+}
+
+function parseTuningParams(
+  raw: string | null,
+  defaults: JukeboxConfig,
+): { config: JukeboxConfig; deletedEdgeIds: number[] } | null {
+  if (!raw) {
+    return null;
+  }
+  const params = new URLSearchParams(raw);
+  const hasTuningParam = TUNING_PARAM_KEYS.some((key) => params.has(key));
+  if (!hasTuningParam) {
+    return null;
+  }
+  const nextConfig: JukeboxConfig = { ...defaults };
+  if (params.has("lb")) {
+    nextConfig.addLastEdge = params.get("lb") !== "0";
+  }
+  if (params.get("jb") === "1") {
+    nextConfig.justBackwards = true;
+  }
+  if (params.get("lg") === "1") {
+    nextConfig.justLongBranches = true;
+  }
+  if (params.get("sq") === "0") {
+    nextConfig.removeSequentialBranches = true;
+  }
+  if (params.has("thresh")) {
+    const rawThresh = Number.parseInt(params.get("thresh") ?? "", 10);
+    if (Number.isFinite(rawThresh) && rawThresh >= 0) {
+      nextConfig.currentThreshold = rawThresh;
+    }
+  }
+  if (params.has("bp")) {
+    const fields = (params.get("bp") ?? "").split(",");
+    if (fields.length === 3) {
+      const minPct = Number.parseInt(fields[0] ?? "", 10);
+      const maxPct = Number.parseInt(fields[1] ?? "", 10);
+      const deltaPct = Number.parseInt(fields[2] ?? "", 10);
+      if (Number.isFinite(minPct)) {
+        nextConfig.minRandomBranchChance = mapPercentToRange(minPct, 0, 1);
+      }
+      if (Number.isFinite(maxPct)) {
+        nextConfig.maxRandomBranchChance = mapPercentToRange(maxPct, 0, 1);
+      }
+      if (Number.isFinite(deltaPct)) {
+        nextConfig.randomBranchChanceDelta = mapPercentToRange(
+          deltaPct,
+          MIN_RANDOM_BRANCH_DELTA,
+          MAX_RANDOM_BRANCH_DELTA,
+        );
+      }
+    }
+  }
+  const deletedEdgeIds = parseDeletedEdgeIds(params.get("d"));
+  return { config: nextConfig, deletedEdgeIds };
 }
 
 function getTrackId(): string | null {
@@ -245,6 +326,7 @@ async function bootstrap() {
   const IDLE_KEEPALIVE_MS = 25_000;
   let player: BufferedAudioPlayer | null = null;
   let engine: JukeboxEngine | null = null;
+  let defaultConfig: JukeboxConfig | null = null;
   let castContext: ReturnType<CastReceiverContextType["getInstance"]> | null =
     null;
   let idleStopTimer: number | null = null;
@@ -394,6 +476,7 @@ async function bootstrap() {
       scheduleIdleStop();
     });
     engine = new JukeboxEngine(player, { randomMode: "random" });
+    defaultConfig = engine.getConfig();
     attachEngineListeners(engine);
   };
 
@@ -406,7 +489,7 @@ async function bootstrap() {
     elements.listenTime.textContent = formatDuration(elapsed / 1000);
   }, 500);
 
-  async function startTrack(trackId: string) {
+  async function startTrack(trackId: string, tuningParams: string | null = null) {
     clearIdleStopTimer();
     stopIdleKeepAlive();
     if (!trackId) {
@@ -465,11 +548,34 @@ async function bootstrap() {
       if (!player || !engine) {
         throw new Error("Audio engine not ready");
       }
+      if (defaultConfig) {
+        engine.updateConfig(defaultConfig);
+        engine.clearDeletedEdges();
+      }
+      const parsedTuning = defaultConfig
+        ? parseTuningParams(tuningParams, defaultConfig)
+        : null;
+      if (parsedTuning) {
+        engine.updateConfig(parsedTuning.config);
+      }
       await loadAudio(jobId, elements.status, player, token, state);
       if (token !== state.loadToken) {
         return;
       }
       engine.loadAnalysis(analysis.result);
+      if (parsedTuning?.deletedEdgeIds?.length) {
+        const graph = engine.getGraphState();
+        if (graph) {
+          const edgeById = new Map(graph.allEdges.map((edge) => [edge.id, edge]));
+          for (const id of parsedTuning.deletedEdgeIds) {
+            const edge = edgeById.get(id);
+            if (edge) {
+              engine.deleteEdge(edge);
+            }
+          }
+          engine.rebuildGraph();
+        }
+      }
       state.vizData = engine.getVisualizationData();
       if (state.vizData) {
         if (!viz) {
@@ -596,6 +702,10 @@ async function bootstrap() {
           typeof customData.baseUrl === "string" ? customData.baseUrl : null;
         const songId =
           typeof customData.songId === "string" ? customData.songId : null;
+        const tuningParams =
+          typeof customData.tuningParams === "string"
+            ? customData.tuningParams
+            : null;
         if (songId) {
           const nextUrl = baseUrl
             ? `${baseUrl.replace(/\/+$/, "")}/cast/${encodeURIComponent(songId)}`
@@ -603,7 +713,7 @@ async function bootstrap() {
           if (nextUrl) {
             window.history.replaceState({}, "", nextUrl);
           }
-          void startTrack(songId);
+          void startTrack(songId, tuningParams);
         }
         return loadRequestData;
       },
@@ -640,7 +750,7 @@ async function bootstrap() {
   }, 250);
   const initialTrackId = getTrackId();
   if (initialTrackId) {
-    void startTrack(initialTrackId);
+    void startTrack(initialTrackId, null);
   } else {
     setIdleState(elements);
     startIdleKeepAlive();
