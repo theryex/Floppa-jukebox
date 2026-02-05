@@ -3,7 +3,6 @@ import { BufferedAudioPlayer } from "../audio/BufferedAudioPlayer";
 import { CanonizerEngine } from "../engine/CanonizerEngine";
 import { CanonizerPlayer } from "../audio/CanonizerPlayer";
 import { CanonizerViz } from "../visualization/CanonizerViz";
-import type { Edge } from "../engine/types";
 
 import { getElements } from "./elements";
 import { attachVisualizationResize } from "./visualization";
@@ -169,6 +168,7 @@ export function bootstrap() {
     canonizerEngine,
     canonizerPlayer,
     canonizerViz,
+    visualizations: [],
   };
 
   const navigationHandlers = createNavigationHandlers({ context, state });
@@ -429,110 +429,110 @@ export function bootstrap() {
     cacheHandlers,
   });
 
-wireCustomHandlers();
+  wireCustomHandlers();
 
-function wireCustomHandlers() {
+  function wireCustomHandlers() {
     elements.retroToggleButton.addEventListener("click", handleRetroToggle);
     elements.canonizerToggle.addEventListener("click", handleCanonizerToggle);
-}
+  }
 
-function handleRetroToggle() {
+  function handleRetroToggle() {
     const isRetro = document.body.classList.toggle("retro-mode");
     elements.retroToggleButton.textContent = isRetro
-        ? "Modern Mode"
-        : "Retro Mode";
+      ? "Modern Mode"
+      : "Retro Mode";
     jukebox.refresh();
     canonizerViz.refresh();
-}
+  }
 
-function handleCanonizerToggle() {
+  function handleCanonizerToggle() {
     state.canonizerEnabled = !state.canonizerEnabled;
     const isActive = state.canonizerEnabled;
     elements.canonizerToggle.classList.toggle("active", isActive);
     elements.canonizerToggle.textContent = isActive
-        ? "Autocanonizer: ON"
-        : "Autocanonizer";
+      ? "Autocanonizer: ON"
+      : "Autocanonizer";
 
     if (isActive) {
-        if (state.isRunning) {
-            stopPlayback(context);
-        }
-        jukebox.setVisible(false);
-        canonizerViz.setVisible(true);
-        initializeCanonizer();
+      if (state.isRunning) {
+        stopPlayback(context);
+      }
+      jukebox.setVisible(false);
+      canonizerViz.setVisible(true);
+      initializeCanonizer();
     } else {
-        stopCanonizerPlayback();
-        canonizerViz.setVisible(false);
-        jukebox.setVisible(true);
+      stopCanonizerPlayback();
+      canonizerViz.setVisible(false);
+      jukebox.setVisible(true);
     }
-}
+  }
 
-function initializeCanonizer() {
+  function initializeCanonizer() {
     if (!state.analysisLoaded || !state.audioLoaded) {
-        setAnalysisStatus(context, "Load a track first to use Autocanonizer", false);
-        state.canonizerEnabled = false;
-        elements.canonizerToggle.classList.remove("active");
-        elements.canonizerToggle.textContent = "Autocanonizer";
-        return;
+      setAnalysisStatus(context, "Load a track first to use Autocanonizer", false);
+      state.canonizerEnabled = false;
+      elements.canonizerToggle.classList.remove("active");
+      elements.canonizerToggle.textContent = "Autocanonizer";
+      return;
     }
 
     const graph = engine.getGraphState();
     if (!graph) {
-        return;
+      return;
     }
 
     try {
-        if (state.rawAnalysis) {
-            canonizerEngine.loadAnalysis(state.rawAnalysis as any);
-        } else {
-            const vizData = state.vizData;
-            if (!vizData) {
-                return;
-            }
-            const analysisForCanonizer = {
-                beats: vizData.beats.map((b, i) => ({
-                    start: b.start,
-                    duration: b.duration,
-                    which: i,
-                })),
-                sections: [],
-                segments: [],
-                bars: [],
-                track: { duration: player.getDuration() || 0 },
-            };
-            canonizerEngine.loadAnalysis(analysisForCanonizer as any);
+      if (state.rawAnalysis) {
+        canonizerEngine.loadAnalysis(state.rawAnalysis as any);
+      } else {
+        const vizData = state.vizData;
+        if (!vizData) {
+          return;
         }
+        const analysisForCanonizer = {
+          beats: vizData.beats.map((b, i) => ({
+            start: b.start,
+            duration: b.duration,
+            which: i,
+          })),
+          sections: [],
+          segments: [],
+          bars: [],
+          track: { duration: player.getDuration() || 0 },
+        };
+        canonizerEngine.loadAnalysis(analysisForCanonizer as any);
+      }
 
-        const canonizerBeats = canonizerEngine.getBeats();
-        const sections = canonizerEngine.getSections();
-        canonizerViz.setData({
-            beats: canonizerBeats,
-            duration: player.getDuration() || 0,
-            sections: sections,
+      const canonizerBeats = canonizerEngine.getBeats();
+      const sections = canonizerEngine.getSections();
+      canonizerViz.setData({
+        beats: canonizerBeats,
+        duration: player.getDuration() || 0,
+        sections: sections,
+      });
+
+      if (state.lastJobId) {
+        const audioUrl = `/api/audio/${state.lastJobId}`;
+        canonizerPlayer.initialize(audioUrl).then(() => {
+          startCanonizerPlayback();
+        }).catch((err) => {
+          console.warn(`Canonizer audio init failed: ${String(err)}`);
+          setAnalysisStatus(context, "Canonizer audio failed to load", false);
         });
-
-        if (state.lastJobId) {
-            const audioUrl = `/api/audio/${state.lastJobId}`;
-            canonizerPlayer.initialize(audioUrl).then(() => {
-                startCanonizerPlayback();
-            }).catch((err) => {
-                console.warn(`Canonizer audio init failed: ${String(err)}`);
-                setAnalysisStatus(context, "Canonizer audio failed to load", false);
-            });
-        }
+      }
     } catch (err) {
-        console.warn(`Canonizer init failed: ${String(err)}`);
+      console.warn(`Canonizer init failed: ${String(err)}`);
     }
-}
+  }
 
-function startCanonizerPlayback() {
+  function startCanonizerPlayback() {
     if (!canonizerEngine.isReady() || !canonizerPlayer.isReady()) {
-        return;
+      return;
     }
 
     const beats = canonizerEngine.getBeats();
     if (beats.length === 0) {
-        return;
+      return;
     }
 
     state.canonizerBeatIndex = 0;
@@ -541,16 +541,16 @@ function startCanonizerPlayback() {
     elements.playButton.textContent = "Stop";
 
     playNextCanonizerBeat();
-}
+  }
 
-function playNextCanonizerBeat() {
+  function playNextCanonizerBeat() {
     if (!state.canonizerEnabled || !state.isRunning) {
-        return;
+      return;
     }
 
     const beats = canonizerEngine.getBeats();
     if (state.canonizerBeatIndex >= beats.length) {
-        state.canonizerBeatIndex = 0;
+      state.canonizerBeatIndex = 0;
     }
 
     const beat = beats[state.canonizerBeatIndex];
@@ -566,21 +566,21 @@ function playNextCanonizerBeat() {
     state.canonizerBeatIndex++;
 
     state.canonizerTimerId = window.setTimeout(() => {
-        playNextCanonizerBeat();
+      playNextCanonizerBeat();
     }, delay * 1000);
-}
+  }
 
-function stopCanonizerPlayback() {
+  function stopCanonizerPlayback() {
     if (state.canonizerTimerId !== null) {
-        window.clearTimeout(state.canonizerTimerId);
-        state.canonizerTimerId = null;
+      window.clearTimeout(state.canonizerTimerId);
+      state.canonizerTimerId = null;
     }
     canonizerPlayer.stop();
     state.isRunning = false;
     if (state.lastPlayStamp !== null) {
-        state.playTimerMs += performance.now() - state.lastPlayStamp;
-        state.lastPlayStamp = null;
+      state.playTimerMs += performance.now() - state.lastPlayStamp;
+      state.lastPlayStamp = null;
     }
     elements.playButton.textContent = "Play";
-}
+  }
 }
