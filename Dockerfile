@@ -132,21 +132,6 @@ WORKDIR /app
 # Copy ONLY the virtual environment from the builder (no compilers!)
 COPY --from=builder /opt/venv /opt/venv
 
-# Copy ONLY the virtual environment from the builder (no compilers!)
-COPY --from=builder /opt/venv /opt/venv
-
-# Upstream runtime dependencies (Deno, upgraded pip/yt-dlp)
-ARG DENO_VERSION=2.6.5
-RUN curl -fsSL "https://github.com/denoland/deno/releases/download/v${DENO_VERSION}/deno-x86_64-unknown-linux-gnu.zip" \
-    -o /tmp/deno.zip \
-    && unzip /tmp/deno.zip -d /usr/local/bin \
-    && rm /tmp/deno.zip \
-    && deno --version \
-    && deno --version
-
-# Dependencies are already copied from builder stage /opt/venv
-# running pip install here is dangerous as runtime has no compilers.
-# && /opt/venv/bin/pip install ...
 
 # Copy source code
 COPY api/ ./api/
