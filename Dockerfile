@@ -84,6 +84,9 @@ RUN if [ "$GPU_MODE" = "cuda" ]; then \
     pip install --no-cache-dir torch torchaudio "numpy<2.0.0" --index-url https://download.pytorch.org/whl/cpu; \
     fi
 
+# Force downgrade numpy to 1.26.4 to guarantee scipy compatibility
+RUN pip install --no-cache-dir --force-reinstall "numpy==1.26.4"
+
 # =============================================================================
 # Stage 3: Final Runtime (Minimal environment)
 # =============================================================================
