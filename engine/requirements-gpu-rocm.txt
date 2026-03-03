@@ -13,5 +13,7 @@
 #
 # See https://pytorch.org/get-started/locally/ for the latest ROCm support
 
+numpy<2.0.0
+
 # Note: CuPy does not support ROCm directly.
 # AMD users can use the torch-based GPU functions which work via HIP.

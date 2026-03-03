@@ -11,6 +11,7 @@
 # For CUDA 11.8:
 # pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu118
 
+numpy<2.0.0
 torch>=2.0.0
 torchaudio>=2.0.0
 

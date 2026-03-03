@@ -75,13 +75,13 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
 # Conditional GPU package installation
 # Using --no-cache-dir is CRITICAL for keeping image size down
 RUN if [ "$GPU_MODE" = "cuda" ]; then \
-    pip install --no-cache-dir torch torchaudio --index-url https://download.pytorch.org/whl/cu121 && \
+    pip install --no-cache-dir torch torchaudio "numpy<2.0.0" --index-url https://download.pytorch.org/whl/cu121 && \
     pip install --no-cache-dir cupy-cuda12x; \
     elif [ "$GPU_MODE" = "rocm" ]; then \
-    pip install --no-cache-dir torch torchaudio --index-url https://download.pytorch.org/whl/rocm5.7; \
+    pip install --no-cache-dir torch torchaudio "numpy<2.0.0" --index-url https://download.pytorch.org/whl/rocm5.7; \
     else \
     # CPU-only torch wheels are much smaller than the default
-    pip install --no-cache-dir torch torchaudio --index-url https://download.pytorch.org/whl/cpu; \
+    pip install --no-cache-dir torch torchaudio "numpy<2.0.0" --index-url https://download.pytorch.org/whl/cpu; \
     fi
 
 # =============================================================================
