@@ -243,7 +243,7 @@ def _cleanup_failure(job_id: str, message: str, youtube_id: str | None = None) -
     result_path = STORAGE_ROOT / "analysis" / f"{job_id}.json"
     if result_path.is_file():
         result_path.unlink()
-    delete_job(DB_PATH, job_id)
+    set_job_status(DB_PATH, job_id, "failed", message)
     logger.info("Job %s failed: %s", job_id, message)
 
 
